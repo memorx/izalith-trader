@@ -1,0 +1,3 @@
+"""
+Izalith Trading System - Tests
+"""
