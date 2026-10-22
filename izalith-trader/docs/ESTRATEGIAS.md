@@ -1,6 +1,6 @@
 # Estrategias: revisión con datos reales
 
-Generado: 2026-10-22 17:18 UTC. Todos los números son **después de comisiones y deslizamiento**.
+Generado: 2026-10-22 20:05 UTC. Todos los números son **después de comisiones y deslizamiento**.
 Se usan los parámetros de libro, sin optimizar. 'Efectivo' es el T-bill de EE.UU. a 3 meses.
 
 Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.
@@ -24,9 +24,14 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 | 🔴 | Scalper reversión a la media (bot actual) | Agresiva | +0.0% | +3.9% | +0% | 0.00 | +0.0% | +10.1% / -53% |
 | 🔴 | Scalper ruptura de 24h (bot actual) | Agresiva | -19.3% | +3.9% | -36% | -3.68 | -26.9% | +10.1% / -53% |
 | 🟢 | DCA semanal a BTC | Agresiva | +35.7% | +2.6% | -83% | 0.80 | +39.8% | +38.3% / -83% |
+| 🟡 | Mundo emergente en partes iguales | Agresiva | +7.0% | +2.3% | -69% | 0.31 | +4.8% | +7.0% / -77% |
+| 🟡 | Tendencia en cada país emergente | Moderada | +8.7% | +2.3% | -33% | 0.49 | +4.2% | +7.0% / -77% |
+| 🟡 | Tendencia en Latinoamérica | Agresiva | +10.1% | +2.3% | -53% | 0.49 | +5.4% | +9.1% / -65% |
+| 🟡 | Rotación a los países más fuertes | Agresiva | +9.0% | +2.4% | -55% | 0.42 | +5.7% | +11.2% / -55% |
 | 🔬 | Mercados de predicción | Especulativa | — | — | — | — | — | — |
 | 🔬 | Diferencia de funding entre exchanges | Especulativa | — | — | — | — | — | — |
 | 🔬 | Acciones en perpetuo los fines de semana | Especulativa | — | — | — | — | — | — |
+| 🔬 | Dólar cripto por país | Especulativa | — | — | — | — | — | — |
 | 🔬 | Prima del peso en Bitso | Especulativa | — | — | — | — | — | — |
 
 ## Detalle
@@ -223,6 +228,54 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Resultado:** aportó 47,900, terminó con 264,182 (x5.52), TIR +35.7% anual
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ caída < 85%
 
+### 🟡 Mundo emergente en partes iguales (Agresiva)
+
+- **Cómo gana:** Compra a todos los emergentes por igual (México, Brasil, India, Vietnam, Sudáfrica, Turquía...) y rebalancea cada trimestre.
+- **Riesgos:** Crisis emergentes (2008, 2015, 2022) con caídas de 50%+; devaluaciones.
+- **Dónde se opera:** IBKR (ETFs de país en EE.UU.): desde México y Canadá
+- **Capital mínimo sugerido:** 1000 USD · **Frecuencia:** Trimestral
+- **Datos:** 22 ETFs de país (Yahoo) desde 1996
+- **Periodo:** 1996-03-18 a 2026-10-21 (30.59 años)
+- **Rendimiento anual:** +7.0% · **caída máxima:** -69% · **peor año:** -45% · **meses positivos:** 58%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ caída < 85% · ❌ sin sesgo conocido
+- **Ojo:** Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.
+
+### 🟡 Tendencia en cada país emergente (Moderada)
+
+- **Cómo gana:** Partes iguales en cada país emergente, pero sólo mientras está arriba de su promedio de 10 meses: sale de los países en crisis.
+- **Riesgos:** Mercados de lado con señales falsas; muchos ETFs, más órdenes.
+- **Dónde se opera:** IBKR (ETFs de país en EE.UU.)
+- **Capital mínimo sugerido:** 2000 USD · **Frecuencia:** Mensual
+- **Datos:** 22 ETFs de país desde 1996
+- **Periodo:** 1996-03-18 a 2026-10-21 (30.59 años)
+- **Rendimiento anual:** +8.7% · **caída máxima:** -33% · **peor año:** -14% · **meses positivos:** 63%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ❌ sin sesgo conocido
+- **Ojo:** Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.
+
+### 🟡 Tendencia en Latinoamérica (Agresiva)
+
+- **Cómo gana:** La misma regla de tendencia, sólo con 5 países de Latinoamérica.
+- **Riesgos:** Región chica y correlacionada: cuando cae una, caen todas; riesgo político y de moneda.
+- **Dónde se opera:** IBKR (EWW, EWZ, ECH, EPU, ARGT)
+- **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Mensual
+- **Datos:** 5 ETFs de Latinoamérica desde 1996
+- **Periodo:** 1996-03-18 a 2026-10-21 (30.59 años)
+- **Rendimiento anual:** +10.1% · **caída máxima:** -53% · **peor año:** -23% · **meses positivos:** 66%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ❌ sin sesgo conocido
+- **Ojo:** Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.
+
+### 🟡 Rotación a los países más fuertes (Agresiva)
+
+- **Cómo gana:** Cada mes se queda con los 4 países que más subieron en un año, si le ganan al efectivo: va a donde está la fuerza (Japón, India, Argentina...).
+- **Riesgos:** Reversiones bruscas entre países; un país puede cerrar su mercado (Rusia 2022).
+- **Dónde se opera:** IBKR (ETFs de país en EE.UU.)
+- **Capital mínimo sugerido:** 1000 USD · **Frecuencia:** Mensual
+- **Datos:** 33 ETFs de país desde 1996
+- **Periodo:** 1995-01-03 a 2026-10-22 (31.8 años)
+- **Rendimiento anual:** +9.0% · **caída máxima:** -55% · **peor año:** -24% · **meses positivos:** 65%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ❌ sin sesgo conocido
+- **Ojo:** Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.
+
 ### 🔬 Mercados de predicción (Especulativa)
 
 - **Cómo gana:** Precios mal puestos en eventos (sesgo hacia el favorito y el perdedor), y la misma pregunta con precio distinto en dos plataformas.
@@ -246,6 +299,14 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance / Hyperliquid (perpetuos de acciones)
 - **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Semanal
 - **Datos:** Pendiente: historial de perpetuos de acciones
+
+### 🔬 Dólar cripto por país (Especulativa)
+
+- **Cómo gana:** En países con control de cambios (Argentina, Nigeria, Turquía...) el dólar cripto cotiza arriba del oficial; en Corea BTC tiene la 'prima kimchi'. La prima mide el estrés local.
+- **Riesgos:** No se puede arbitrar desde fuera: controles de capital, KYC local, cuentas bancarias del país.
+- **Dónde se opera:** Sólo como información: aprovecharlo exige vivir en ese país
+- **Capital mínimo sugerido:** 0 USD · **Frecuencia:** Informativo
+- **Datos:** Recolector: Bitso, Mercado Bitcoin, Buda, Upbit, BtcTurk, VALR, Luno, CoinDCX, Binance P2P
 
 ### 🔬 Prima del peso en Bitso (Especulativa)
 
