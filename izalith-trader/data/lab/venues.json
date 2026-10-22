@@ -1,0 +1,78 @@
+{
+  "actualizado": "2026-10-22",
+  "intro": "Dónde se puede abrir cuenta para que el bot opere, según el país donde vives de verdad (residencia fiscal: es una sola y se declara donde realmente vives; México y Canadá intercambian datos de cuentas). Investigado el 22 oct 2026 con fuentes de 2025-2026; lo que no se pudo confirmar está marcado.",
+  "paises": [
+    {
+      "nombre": "Si vives en México",
+      "recomendacion": "Lo mínimo: Binance para cripto e Interactive Brokers (IBKR Pro) para acciones, ETFs, BMV y forex. Binance tiene SPEI directo, perpetuos baratos, testnet y la mejor API; IBKR es el único que junta API, bolsa de EE.UU. y México, forex y cuenta de papel, sin mínimo. Para mercados poco comunes: Bitso como puerta de entrada (SPEI gratis, retiros de USDC baratos) hacia Hyperliquid y, con montos chicos, Polymarket.",
+      "pasos": [
+        "Abre Binance y deposita por SPEI una cantidad chica para probar el depósito y el retiro.",
+        "Abre IBKR Pro. Antes de contar con el SPEI confírmalo en su portal: una página dice que sí y otra que está suspendido.",
+        "Crea llaves de API sólo con permiso de operar (nunca de retirar) y ponlas en el .env con DRY_RUN=true.",
+        "Deja correr el bot en papel al menos un mes y compara contra el backtest antes de poner dinero real."
+      ],
+      "plataformas": [
+        {"plataforma": "Binance", "para": "Cripto spot y perpetuos", "deposito": "SPEI directo vía Medá (IFPE), saldo en MXN en ~30 min; también P2P", "minimo": "Sin confirmar", "comisiones": "Spot 0.10%/0.10% (0.075% con BNB); perpetuos 0.02%/0.05%", "api": "Excelente: SDK oficial de Python, testnet", "notas": "Regulada en Abu Dabi, sin autorización cripto en México. No hay página que confirme en explícito que los perpetuos están disponibles para México"},
+        {"plataforma": "Bitso", "para": "Cripto en pesos y puerta de entrada", "deposito": "SPEI gratis a CLABE propia", "minimo": "Sin confirmar", "comisiones": "Pares MXN 0.60%/0.78%; pares USD/USDT 0.30%/0.36%", "api": "Media: REST y WebSocket (se usa con ccxt)", "notas": "Caro para un bot en pares MXN; sin perpetuos"},
+        {"plataforma": "IBKR Pro", "para": "Acciones y ETFs de EE.UU., BMV, forex", "deposito": "Dudoso por SPEI (hay dos versiones de su ayuda); wire SWIFT", "minimo": "US$0", "comisiones": "EE.UU. US$0.005 por acción (mín. US$1); BMV 0.1% (mín. 60 MXN); forex 0.2 pb (mín. US$2)", "api": "La más completa: TWS/IB Gateway, Web API, paper trading", "notas": "Los datos en tiempo real por API piden US$500 de saldo y suscripción. El bot todavía no tiene adaptador de IBKR"},
+        {"plataforma": "Webull México", "para": "Acciones de EE.UU. con API simple", "deposito": "SPEI sin confirmar", "minimo": "Sin mínimo", "comisiones": "Cero comisiones", "api": "OpenAPI oficial con SDK de Python, sólo EE.UU.", "notas": "API nueva"},
+        {"plataforma": "Hyperliquid", "para": "Perpetuos 24/7, perpetuos de acciones y materias primas", "deposito": "SPEI a Bitso, USDC por Arbitrum, de ahí a Hyperliquid", "minimo": "5 USDC", "comisiones": "Perpetuos 0.015%/0.045%", "api": "Excelente: SDK oficial, testnet", "notas": "Sin regulador y custodia propia. Prohíbe VPN. Incidentes en mar 2025, 10 oct 2025 y jul 2026"},
+        {"plataforma": "Polymarket", "para": "Mercados de predicción", "deposito": "Bitso, USDC por Polygon", "minimo": "US$2", "comisiones": "Sólo paga quien toma liquidez", "api": "Buena: CLOB API y SDK oficial", "notas": "México no está en su bloqueo, pero legalmente es zona gris (revisión pedida en ene 2026, sin resultado). Sólo montos chicos"},
+        {"plataforma": "OANDA", "para": "Forex", "deposito": "Tarjeta, transferencia, Wise; SPEI sin confirmar", "minimo": "Sin mínimo con tarjeta", "comisiones": "EUR/USD desde 1.0 pip", "api": "No: la API v20 excluye la entidad que atiende a México (sólo MT5)", "notas": "El adaptador de forex del bot es de OANDA: desde México no sirve; el forex tendría que ir por IBKR"},
+        {"plataforma": "GBM, Actinver, Kuspit, Hapi", "para": "Invertir a mano", "deposito": "SPEI", "minimo": "Desde 100 MXN", "comisiones": "0.10% a 0.25%", "api": "No tienen API pública para mandar órdenes", "notas": "No sirven para el bot; sí para un DCA hecho a mano"}
+      ],
+      "impuestos": "En México: acciones en BMV o del SIC, 10% definitivo sobre la ganancia, también con broker extranjero (pero ahí lo declaras tú). Acciones fuera del SIC con broker extranjero, forex y derivados: tarifa progresiva de hasta 35%. Cripto: no hay artículo específico; la práctica común es tratarla como venta de bienes, a tarifa progresiva. Confírmalo con tu contador antes de operar en serio."
+    },
+    {
+      "nombre": "Si vives en Canadá",
+      "recomendacion": "Lo mínimo: Kraken para cripto spot (en el bot: CRYPTO_EXCHANGE=kraken) e IBKR Canada para acciones canadienses y de EE.UU., forex y API. En Canadá los minoristas no tienen perpetuos legales, así que las estrategias de carry y las de corto quedan fuera. Binance, Bybit y OKX no operan ahí. Para eventos: IBKR ForecastTrader (contratos de 30 días o más). Para forex por API: OANDA Canada.",
+      "pasos": [
+        "Abre Kraken y deposita por Interac (gratis, hasta 10 mil CAD al día).",
+        "Abre IBKR Canada: es el único broker con API oficial de órdenes para personas.",
+        "En el .env pon CRYPTO_EXCHANGE=kraken y deja DRY_RUN=true el primer mes."
+      ],
+      "plataformas": [
+        {"plataforma": "Kraken Canada", "para": "Cripto spot", "deposito": "Interac gratis, wire", "minimo": "—", "comisiones": "Spot 0.38%/0.80% (caro para operar seguido)", "api": "La mejor: REST, WebSocket, FIX", "notas": "Registrada ante la CSA. Sin margen ni perpetuos"},
+        {"plataforma": "IBKR Canada", "para": "Acciones CA y EE.UU., forex, eventos", "deposito": "Wire, pago de factura, EFT", "minimo": "US$0", "comisiones": "CA: CAD 0.01 por acción (mín. CAD 1); EE.UU.: US$0.005 (mín. US$1)", "api": "Completa (TWS/IB Gateway)", "notas": "CIRO/CIPF. El bot todavía no tiene adaptador de IBKR"},
+        {"plataforma": "NDAX", "para": "Cripto spot", "deposito": "Interac, wire, cripto (gratis)", "minimo": "—", "comisiones": "0.20% fija", "api": "Media (WebSocket, ccxt)", "notas": "CIRO. Más barata que Kraken en spot"},
+        {"plataforma": "OANDA Canada", "para": "Forex", "deposito": "Cuenta bancaria canadiense", "minimo": "Sin mínimo", "comisiones": "Desde 0.0 pips + CAD 1 por cada 10 mil unidades", "api": "Sí, API v20 (la que ya usa el bot)", "notas": "CIRO; apalancamiento máximo 50:1"},
+        {"plataforma": "Wealthsimple / Questrade", "para": "Invertir a mano", "deposito": "Interac", "minimo": "—", "comisiones": "US$0 en acciones", "api": "No para bots (Wealthsimple lo prohíbe; Questrade sólo para socios)", "notas": "Sirven para un DCA hecho a mano en VFV o XBB"}
+      ],
+      "impuestos": "En Canadá la ganancia de capital tributa al 50% (el aumento a 2/3 se canceló en mar 2025). Si la CRA considera el trading frecuente como negocio, tributa completa como ingreso. En Ontario y otras provincias hay un tope de CAD 30 mil netos al año en altcoins para inversionistas no elegibles (BTC, ETH, SOL y otras no cuentan)."
+    }
+  ],
+  "tasas": "En México los CETES pagan 6.23% a 28 días (subasta del 20 oct 2026) y 7.11% a un año (13 oct 2026); la tasa de Banxico está en 6.50%. Eso es en pesos y sin riesgo: cualquier estrategia en pesos tiene que ganarle a eso, y una en dólares, al T-bill (~4% en los últimos años). Por eso en el laboratorio el carry de funding en BTC/ETH sale en amarillo: en los últimos tres años pagó menos que el efectivo.",
+  "sin_confirmar": [
+    "IBKR: si el SPEI está activo hoy y qué entidad atiende a mexicanos",
+    "Kalshi: si México está restringido (no se pudo leer el documento oficial); para Canadá sí está restringido",
+    "Alpaca: si acepta residentes de México; en Canadá todavía no (su meta es ~nov 2026)",
+    "Binance: página explícita de perpetuos para México y depósitos mínimos de los exchanges",
+    "Polymarket en México: resultado de la revisión del gobierno",
+    "Al consultar Bybit, la conexión salió como Canadá: si el bot corre desde Canadá con cuenta mexicana, algunos exchanges la pueden bloquear por IP"
+  ],
+  "fuentes": [
+    "https://www.binance.com/es-MX/terms",
+    "https://www.binance.com/en/fee/futureFee",
+    "https://bitso.com/fees",
+    "https://www.interactivebrokers.com/en/accounts/open-account-country-list.php",
+    "https://www.ibkrguides.com/kb/en-us/how-to-deposit-mxn.htm",
+    "https://www.interactivebrokers.com/en/pricing/commissions-stocks.php?re=amer",
+    "https://developer.webull.com.mx/apis/docs/about-open-api",
+    "https://docs.alpaca.markets/us/docs/international-accounts.md",
+    "https://app.hyperliquid.xyz/terms",
+    "https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees",
+    "https://docs.polymarket.com/api-reference/geoblock",
+    "https://help.kalshi.com/en/articles/14026044-international-access-eligibility",
+    "https://www.kraken.com/en-ca/features/fee-schedule",
+    "https://www.interactivebrokers.ca/en/pricing/commissions-stocks.php",
+    "https://ndax.io/fees",
+    "https://www.oanda.com/ca-en/legal/margin-rates/",
+    "https://www.osc.ca/en/industry/registration-and-compliance/registered-crypto-asset-trading-platforms",
+    "https://help.wealthsimple.com/hc/en-ca/articles/360056581214-Day-trading-at-Wealthsimple",
+    "https://www.monex.com.mx/portal/download/reportes/261020%20Subastas.pdf",
+    "https://www.poresto.com/mexico/2026/9/24/banxico-mantiene-tasa-de-interes-en-650-y-preve-que-inflacion-llegue-a-la-meta-hasta-finales-de-2027.html",
+    "https://www.diputados.gob.mx/LeyesBiblio/pdf/LISR.pdf",
+    "https://www.bdomexico.com/getmedia/3cce628c-786c-490e-8f8d-1cb8a7c4421a/BDO-Articulo-Tratamiento-Fiscal-de-Criptomonedas.pdf?ext=.pdf",
+    "https://www.pm.gc.ca/en/news/news-releases/2025/03/21/prime-minister-mark-carney-cancels-proposed-capital-gains-tax-increase"
+  ]
+}
