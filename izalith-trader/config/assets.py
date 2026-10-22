@@ -81,11 +81,11 @@ ASSETS: Dict[str, Asset] = {
         price_precision=5,
         qty_precision=0
     ),
-    "USDT/USDC": Asset(
-        symbol="USDT/USDC",
+    "USDC/USDT": Asset(
+        symbol="USDC/USDT",
         market=Market.CRYPTO,
-        base="USDT",
-        quote="USDC",
+        base="USDC",
+        quote="USDT",
         name="Stablecoin Pair",
         min_qty=1.0,
         min_notional=10.0,

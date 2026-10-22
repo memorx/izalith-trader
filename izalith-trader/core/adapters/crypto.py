@@ -1,447 +1,396 @@
 """
-Izalith Trading System - Crypto Adapter (Binance via ccxt)
+Izalith Trading System - Crypto Adapter (ccxt: Binance, Kraken, Bitso, Bybit, OKX...)
+
+El exchange se elige con CRYPTO_EXCHANGE (por defecto binance). Desde México lo natural es
+Binance o Bitso; desde Canadá, Kraken (Binance, Bybit y OKX no operan ahí).
+
+Usa dos clientes del mismo exchange:
+- datos: público de producción, siempre (precios reales aunque se opere en testnet)
+- operación: la cuenta con llaves (testnet o real), sólo si hay llaves
+
+Los símbolos del bot son los del laboratorio (BTC/USDT). Si el exchange no tiene ese par,
+se usa el equivalente en USD o USDC (Kraken: BTC/USD).
+
+Si Binance no contesta, no se inventan precios: se regresa None o [] salvo que la
+simulación se haya pedido o permitido (ver BaseAdapter).
 """
 import asyncio
-import random
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from .base import BaseAdapter, PriceData, OHLCV, OrderResult, Position
+from .base import BaseAdapter, PriceData, OHLCV, OrderResult, Position, new_client_order_id
 from core.utils.logger import get_logger
 
 logger = get_logger("crypto")
 
-# Simulated base prices for fallback
-SIMULATED_PRICES = {
-    "BTC/USDT": 67500.0,
-    "ETH/USDT": 3450.0,
-    "SOL/USDT": 145.0,
-    "DOGE/USDT": 0.12,
-    "USDT/USDC": 1.0001,
-}
+TF_SECONDS = {"1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800}
 
 
 class CryptoAdapter(BaseAdapter):
-    """Binance crypto adapter using ccxt with simulation fallback."""
+    """Binance crypto adapter using ccxt."""
 
     market = "crypto"
+    supports_short = False   # spot: no se puede vender lo que no se tiene
+    sim_prices = {
+        "BTC/USDT": 67500.0, "ETH/USDT": 3450.0, "SOL/USDT": 145.0,
+        "DOGE/USDT": 0.12, "USDC/USDT": 1.0001,
+    }
+    sim_vol_per_hour = 0.005
+    sim_fee = 0.001
 
     def __init__(
         self,
         api_key: str = "",
         secret: str = "",
         testnet: bool = True,
-        dry_run: bool = True
+        dry_run: bool = True,
+        allow_simulation: bool = False,
+        simulate: bool = False,
+        exchange_id: str = "binance",
     ):
-        super().__init__(dry_run)
+        super().__init__(dry_run, allow_simulation, simulate)
         self.api_key = api_key
         self.secret = secret
         self.testnet = testnet
-        self._exchange = None
-        self._simulation_mode = False
-        self._simulated_prices = SIMULATED_PRICES.copy()
-        self._price_history: Dict[str, List[float]] = {}
+        self.exchange_id = (exchange_id or "binance").lower()
+        self.exchange_name = self.exchange_id.capitalize()
+        self._data = None
+        self._trade = None
+        self._symbol_map: Dict[str, str] = {}
+
+    @property
+    def display_name(self) -> str:
+        return f"Cripto ({self.exchange_name})"
+
+    def resolve_symbol(self, symbol: str) -> str:
+        """Par del bot -> par del exchange (BTC/USDT -> BTC/USD en Kraken)."""
+        if symbol in self._symbol_map:
+            return self._symbol_map[symbol]
+        markets = getattr(self._data, "markets", None) or {}
+        if not markets:
+            return symbol
+        resolved = symbol
+        if symbol not in markets and "/" in symbol:
+            base = symbol.split("/", 1)[0]
+            for alt in ("USDT", "USD", "USDC"):
+                if f"{base}/{alt}" in markets:
+                    resolved = f"{base}/{alt}"
+                    break
+        self._symbol_map[symbol] = resolved
+        return resolved
+
+    # ── Conexión ──
 
     async def connect(self) -> bool:
-        """Connect to Binance with fallback to simulation mode."""
+        if self.force_simulation:
+            return self._enter_simulation("simulación pedida")
         try:
             import ccxt.async_support as ccxt
-
-            options = {
-                'enableRateLimit': True,
-                'rateLimit': 100,
-                'timeout': 10000,  # 10 second timeout
-            }
-
-            if self.api_key and self.secret:
-                self._exchange = ccxt.binance({
-                    'apiKey': self.api_key,
-                    'secret': self.secret,
-                    'sandbox': self.testnet,
-                    'options': options
-                })
-            else:
-                # Public API only - use production for public data
-                self._exchange = ccxt.binance({
-                    'sandbox': False,
-                    'options': options
-                })
-
-            # Try to load markets with timeout
-            try:
-                await asyncio.wait_for(
-                    self._exchange.load_markets(),
-                    timeout=15.0
-                )
-                self.connected = True
-                self._simulation_mode = False
-
-                mode = "testnet" if self.testnet else "live"
-                auth = "authenticated" if self.api_key else "public"
-                logger.info(f"Binance connected ({mode}, {auth})")
-                return True
-
-            except asyncio.TimeoutError:
-                logger.warning("Binance connection timed out, using simulation mode")
-                await self._enable_simulation_mode()
-                return True
-
         except ImportError:
-            logger.warning("ccxt not installed, using simulation mode")
-            await self._enable_simulation_mode()
-            return True
+            return self._enter_simulation("ccxt no está instalado")
 
+        common = {"enableRateLimit": True, "timeout": 10000}
+        exchange_cls = getattr(ccxt, self.exchange_id, None)
+        if exchange_cls is None:
+            return self._enter_simulation(f"ccxt no conoce el exchange '{self.exchange_id}'")
+        try:
+            self._data = exchange_cls(dict(common))
+            await asyncio.wait_for(self._data.load_markets(), timeout=20.0)
         except Exception as e:
-            logger.warning(f"Binance connection failed: {e}, using simulation mode")
-            await self._enable_simulation_mode()
-            return True
+            await self._close_clients()
+            return self._enter_simulation(f"{self.exchange_name} no contestó ({e.__class__.__name__}: {e})")
 
-    async def _enable_simulation_mode(self):
-        """Enable simulation mode with realistic price generation."""
-        self._simulation_mode = True
-        self.connected = True
-        if self._exchange:
+        if self.api_key and self.secret:
             try:
-                await self._exchange.close()
-            except Exception:
-                pass
-            self._exchange = None
+                self._trade = exchange_cls({**common, "apiKey": self.api_key, "secret": self.secret})
+                if self.testnet:
+                    self._trade.set_sandbox_mode(True)
+                await asyncio.wait_for(self._trade.load_markets(), timeout=20.0)
+            except Exception as e:
+                logger.error(f"Cuenta de {self.exchange_name} no disponible: {e}. Sólo habrá datos, no operación real.")
+                if self._trade:
+                    try:
+                        await self._trade.close()
+                    except Exception:
+                        pass
+                self._trade = None
 
-        # Initialize price history for realistic simulation
-        for symbol, base_price in SIMULATED_PRICES.items():
-            self._price_history[symbol] = [base_price]
-            self._simulated_prices[symbol] = base_price
+        self.connected = True
+        self._simulation_mode = False
+        mode = "testnet" if self.testnet else "REAL"
+        auth = f"cuenta {mode}" if self._trade else "sólo datos públicos"
+        logger.info(f"{self.exchange_name} conectado ({auth})")
+        return True
 
-        logger.info("Crypto adapter running in SIMULATION mode")
-
-    def _generate_simulated_price(self, symbol: str) -> float:
-        """Generate a realistic simulated price with random walk."""
-        if symbol not in self._simulated_prices:
-            self._simulated_prices[symbol] = 100.0
-            self._price_history[symbol] = [100.0]
-
-        base_price = self._simulated_prices[symbol]
-
-        # Random walk: small percentage change
-        change_pct = random.gauss(0, 0.001)  # 0.1% std dev
-        new_price = base_price * (1 + change_pct)
-
-        # Keep price history for OHLCV simulation
-        if symbol not in self._price_history:
-            self._price_history[symbol] = []
-        self._price_history[symbol].append(new_price)
-
-        # Keep last 200 prices
-        if len(self._price_history[symbol]) > 200:
-            self._price_history[symbol] = self._price_history[symbol][-200:]
-
-        self._simulated_prices[symbol] = new_price
-        return new_price
-
-    def _generate_simulated_ohlcv(self, symbol: str, limit: int) -> List[OHLCV]:
-        """Generate simulated OHLCV data."""
-        if symbol not in self._simulated_prices:
-            self._simulated_prices[symbol] = SIMULATED_PRICES.get(symbol, 100.0)
-
-        base_price = self._simulated_prices[symbol]
-        candles = []
-        now = datetime.now(timezone.utc)
-
-        for i in range(limit, 0, -1):
-            timestamp = now - timedelta(hours=i)
-
-            # Generate realistic OHLCV
-            volatility = 0.005  # 0.5% per candle
-            open_price = base_price * (1 + random.gauss(0, volatility))
-            close_price = open_price * (1 + random.gauss(0, volatility))
-            high_price = max(open_price, close_price) * (1 + abs(random.gauss(0, volatility/2)))
-            low_price = min(open_price, close_price) * (1 - abs(random.gauss(0, volatility/2)))
-            volume = random.uniform(1000, 10000) * base_price
-
-            candles.append(OHLCV(
-                timestamp=timestamp,
-                open=open_price,
-                high=high_price,
-                low=low_price,
-                close=close_price,
-                volume=volume
-            ))
-
-            base_price = close_price
-
-        # Update current price to last close
-        if candles:
-            self._simulated_prices[symbol] = candles[-1].close
-
-        return candles
+    async def _close_clients(self):
+        for client in (self._data, self._trade):
+            if client:
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+        self._data = None
+        self._trade = None
 
     async def disconnect(self) -> None:
-        """Disconnect from Binance."""
-        if self._exchange:
-            try:
-                await self._exchange.close()
-            except Exception:
-                pass
-            self._exchange = None
+        await self._close_clients()
         self.connected = False
-        logger.info("Binance disconnected")
+        logger.info(f"{self.exchange_name} disconnected")
 
-    async def get_price(self, symbol: str) -> Optional[PriceData]:
-        """Get current price for a symbol."""
-        if self._simulation_mode:
-            return self._get_simulated_price(symbol)
+    # ── Datos ──
 
-        if not self._exchange:
-            return self._get_simulated_price(symbol)
-
-        try:
-            ticker = await self._exchange.fetch_ticker(symbol)
-
-            return PriceData(
-                symbol=symbol,
-                market=self.market,
-                timestamp=datetime.now(timezone.utc),
-                bid=ticker.get('bid', 0) or 0,
-                ask=ticker.get('ask', 0) or 0,
-                last=ticker.get('last', 0) or 0,
-                volume=ticker.get('quoteVolume', 0) or 0,
-                high_24h=ticker.get('high', 0) or 0,
-                low_24h=ticker.get('low', 0) or 0,
-                change_24h_pct=ticker.get('percentage', 0) or 0
-            )
-
-        except Exception as e:
-            logger.debug(f"Falling back to simulation for {symbol}: {e}")
-            return self._get_simulated_price(symbol)
-
-    def _get_simulated_price(self, symbol: str) -> PriceData:
-        """Get simulated price data."""
-        price = self._generate_simulated_price(symbol)
-        spread = price * 0.0001  # 0.01% spread
-
-        # Simulate 24h stats
-        base = SIMULATED_PRICES.get(symbol, 100.0)
-        change_24h = ((price - base) / base) * 100
-
+    def _price_from_ticker(self, symbol: str, ticker: Dict) -> PriceData:
         return PriceData(
             symbol=symbol,
             market=self.market,
             timestamp=datetime.now(timezone.utc),
-            bid=price - spread/2,
-            ask=price + spread/2,
-            last=price,
-            volume=random.uniform(1000000, 5000000),
-            high_24h=price * 1.02,
-            low_24h=price * 0.98,
-            change_24h_pct=change_24h
+            bid=ticker.get('bid') or 0,
+            ask=ticker.get('ask') or 0,
+            last=ticker.get('last') or 0,
+            volume=ticker.get('quoteVolume') or 0,
+            high_24h=ticker.get('high') or 0,
+            low_24h=ticker.get('low') or 0,
+            change_24h_pct=ticker.get('percentage') or 0
         )
 
+    async def get_price(self, symbol: str) -> Optional[PriceData]:
+        if self._simulation_mode:
+            return self._sim_price(symbol)
+        if not self._data:
+            return None
+        try:
+            ticker = await self._data.fetch_ticker(self.resolve_symbol(symbol))
+            price = self._price_from_ticker(symbol, ticker)
+            return price if price.last > 0 else None
+        except Exception as e:
+            self.last_error = str(e)
+            logger.warning(f"Sin precio de {symbol}: {e}")
+            return None
+
     async def get_prices(self, symbols: List[str]) -> List[PriceData]:
-        """Get current prices for multiple symbols."""
         if self._simulation_mode:
-            return [self._get_simulated_price(s) for s in symbols]
-
-        if not self._exchange:
-            return [self._get_simulated_price(s) for s in symbols]
-
+            return [self._sim_price(s) for s in symbols]
+        if not self._data:
+            return []
+        if not self._data.has.get("fetchTickers"):
+            # Bitso y otros no tienen consulta en bloque: uno por uno
+            out = []
+            for s in symbols:
+                p = await self.get_price(s)
+                if p:
+                    out.append(p)
+            return out
+        mapped = {self.resolve_symbol(s): s for s in symbols}
         try:
-            tickers = await self._exchange.fetch_tickers(symbols)
-            prices = []
-
-            for symbol in symbols:
-                if symbol in tickers:
-                    ticker = tickers[symbol]
-                    prices.append(PriceData(
-                        symbol=symbol,
-                        market=self.market,
-                        timestamp=datetime.now(timezone.utc),
-                        bid=ticker.get('bid', 0) or 0,
-                        ask=ticker.get('ask', 0) or 0,
-                        last=ticker.get('last', 0) or 0,
-                        volume=ticker.get('quoteVolume', 0) or 0,
-                        high_24h=ticker.get('high', 0) or 0,
-                        low_24h=ticker.get('low', 0) or 0,
-                        change_24h_pct=ticker.get('percentage', 0) or 0
-                    ))
-                else:
-                    prices.append(self._get_simulated_price(symbol))
-
-            return prices
-
+            tickers = await self._data.fetch_tickers(list(mapped))
         except Exception as e:
-            logger.debug(f"Falling back to simulation for prices: {e}")
-            return [self._get_simulated_price(s) for s in symbols]
+            self.last_error = str(e)
+            logger.warning(f"Sin precios de cripto: {e}")
+            return []
+        return [self._price_from_ticker(orig, tickers[ex]) for ex, orig in mapped.items() if ex in tickers]
 
-    async def get_ohlcv(
-        self,
-        symbol: str,
-        timeframe: str = "1h",
-        limit: int = 100
-    ) -> List[OHLCV]:
-        """Get OHLCV candle data."""
+    async def get_ohlcv(self, symbol: str, timeframe: str = "1h", limit: int = 100) -> List[OHLCV]:
+        """Velas cerradas. Binance incluye la vela en formación al final: se descarta."""
         if self._simulation_mode:
-            return self._generate_simulated_ohlcv(symbol, limit)
-
-        if not self._exchange:
-            return self._generate_simulated_ohlcv(symbol, limit)
-
+            return self._sim_ohlcv(symbol, limit)
+        if not self._data:
+            return []
         try:
-            ohlcv = await self._exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-            return [
-                OHLCV(
-                    timestamp=datetime.fromtimestamp(candle[0] / 1000, tz=timezone.utc),
-                    open=candle[1],
-                    high=candle[2],
-                    low=candle[3],
-                    close=candle[4],
-                    volume=candle[5]
-                )
-                for candle in ohlcv
-            ]
-
+            raw = await self._data.fetch_ohlcv(self.resolve_symbol(symbol), timeframe, limit=limit + 1)
         except Exception as e:
-            logger.debug(f"Falling back to simulation for OHLCV: {e}")
-            return self._generate_simulated_ohlcv(symbol, limit)
-
-    async def place_market_order(
-        self,
-        symbol: str,
-        side: str,
-        quantity: float
-    ) -> OrderResult:
-        """Place a market order."""
-        price_data = await self.get_price(symbol)
-        price = price_data.last if price_data else 0
-
-        if self.dry_run or self._simulation_mode:
-            result = self._simulate_order(symbol, side, quantity, price)
-            logger.info(f"[SIMULATED] Market {side} {quantity:.6f} {symbol} @ ${price:,.2f}")
-            return result
-
-        if not self._exchange or not self.api_key:
-            return OrderResult(success=False, error="Not authenticated")
-
-        try:
-            order = await self._exchange.create_market_order(symbol, side, quantity)
-            logger.info(f"Market {side} {quantity} {symbol} - Order ID: {order['id']}")
-
-            return OrderResult(
-                success=True,
-                order_id=order['id'],
-                symbol=symbol,
-                side=side,
-                quantity=quantity,
-                price=order.get('average', 0) or order.get('price', 0),
-                filled_quantity=order.get('filled', quantity),
-                status=order.get('status', 'filled')
+            self.last_error = str(e)
+            logger.warning(f"Sin velas de {symbol}: {e}")
+            return []
+        step_ms = TF_SECONDS.get(timeframe, 3600) * 1000
+        now_ms = datetime.now(timezone.utc).timestamp() * 1000
+        closed = [c for c in raw if c[0] + step_ms <= now_ms]
+        return [
+            OHLCV(
+                timestamp=datetime.fromtimestamp(c[0] / 1000, tz=timezone.utc),
+                open=c[1], high=c[2], low=c[3], close=c[4], volume=c[5]
             )
+            for c in closed[-limit:]
+        ]
 
-        except Exception as e:
-            logger.error(f"Error placing market order: {e}")
-            return OrderResult(success=False, error=str(e))
+    # ── Reglas del mercado ──
 
-    async def place_limit_order(
-        self,
-        symbol: str,
-        side: str,
-        quantity: float,
-        price: float
-    ) -> OrderResult:
-        """Place a limit order."""
-        if self.dry_run or self._simulation_mode:
-            result = self._simulate_order(symbol, side, quantity, price)
-            logger.info(f"[SIMULATED] Limit {side} {quantity:.6f} {symbol} @ ${price:,.2f}")
-            return result
+    def _market_info(self, symbol: str) -> Optional[Dict]:
+        client = self._trade or self._data
+        if not client or not getattr(client, "markets", None):
+            return None
+        return client.markets.get(self.resolve_symbol(symbol))
 
-        if not self._exchange or not self.api_key:
-            return OrderResult(success=False, error="Not authenticated")
+    def amount_to_precision(self, symbol: str, quantity: float) -> float:
+        client = self._trade or self._data
+        if client and self._market_info(symbol):
+            try:
+                return float(client.amount_to_precision(self.resolve_symbol(symbol), quantity))
+            except Exception:
+                return 0.0
+        return quantity
 
+    def min_notional(self, symbol: str) -> float:
+        info = self._market_info(symbol)
+        if not info:
+            return 10.0 if not self._simulation_mode else 0.0
+        cost_min = ((info.get("limits") or {}).get("cost") or {}).get("min")
+        return float(cost_min or 0.0)
+
+    # ── Órdenes ──
+
+    def _order_result(self, symbol: str, side: str, quantity: float, order: Dict, cid: str) -> OrderResult:
+        filled = float(order.get('filled') or 0.0)
+        avg = float(order.get('average') or order.get('price') or 0.0)
+        base = symbol.split("/")[0]
+        fee_quote, fee_base = 0.0, 0.0
+        for f in (order.get('fees') or ([order['fee']] if order.get('fee') else [])):
+            if not f or f.get('cost') is None:
+                continue
+            if f.get('currency') == base:
+                fee_base += float(f['cost'])
+                fee_quote += float(f['cost']) * avg
+            else:
+                fee_quote += float(f['cost'])
+        # Si la comisión se cobró en el activo comprado, lo que queda en la cuenta es menos
+        net_filled = filled - fee_base if side == "buy" else filled
+        return OrderResult(
+            success=True,
+            order_id=str(order.get('id', '')),
+            client_order_id=cid,
+            symbol=symbol, side=side, quantity=quantity,
+            price=avg,
+            filled_quantity=net_filled,
+            status=order.get('status') or 'unknown',
+            fee=fee_quote,
+        )
+
+    async def _find_order(self, symbol: str, cid: str) -> Optional[Dict]:
+        """Busca una orden por nuestro id: sirve para saber si una orden 'fallida' sí entró."""
+        ex_symbol = self.resolve_symbol(symbol)
+        if self.exchange_id == "binance":
+            try:
+                return await self._trade.fetch_order("", ex_symbol, params={"origClientOrderId": cid})
+            except Exception:
+                return None
+        # Otros exchanges: buscar entre las órdenes recientes
+        for fetch in ("fetch_open_orders", "fetch_closed_orders"):
+            try:
+                for o in await getattr(self._trade, fetch)(ex_symbol, None, 50):
+                    if o.get("clientOrderId") == cid:
+                        return o
+            except Exception:
+                continue
+        return None
+
+    async def _send(self, symbol: str, side: str, quantity: float, order_type: str,
+                    price: Optional[float], cid: str) -> OrderResult:
+        qty = self.amount_to_precision(symbol, quantity)
+        if qty <= 0:
+            return OrderResult(success=False, symbol=symbol, side=side, quantity=quantity,
+                               status="failed", error="Cantidad menor que el mínimo del mercado",
+                               client_order_id=cid)
+        ex_symbol = self.resolve_symbol(symbol)
         try:
-            order = await self._exchange.create_limit_order(symbol, side, quantity, price)
-            logger.info(f"Limit {side} {quantity} {symbol} @ ${price:,.2f} - Order ID: {order['id']}")
-
-            return OrderResult(
-                success=True,
-                order_id=order['id'],
-                symbol=symbol,
-                side=side,
-                quantity=quantity,
-                price=price,
-                filled_quantity=order.get('filled', 0),
-                status=order.get('status', 'open')
-            )
-
+            if order_type == "market":
+                order = await self._trade.create_order(ex_symbol, "market", side, qty, None, {"clientOrderId": cid})
+            else:
+                order = await self._trade.create_order(ex_symbol, "limit", side, qty, price, {"clientOrderId": cid})
         except Exception as e:
-            logger.error(f"Error placing limit order: {e}")
-            return OrderResult(success=False, error=str(e))
+            # El error pudo llegar después de que Binance aceptó la orden: preguntar antes de reportar falla
+            found = await self._find_order(symbol, cid)
+            if found:
+                logger.warning(f"La orden {cid} sí entró pese al error ({e})")
+                return self._order_result(symbol, side, qty, found, cid)
+            logger.error(f"Error en orden {order_type} {side} {qty} {symbol}: {e}")
+            return OrderResult(success=False, symbol=symbol, side=side, quantity=qty,
+                               status="failed", error=str(e), client_order_id=cid)
+
+        if order_type == "market" and not order.get('filled'):
+            fetched = await self._find_order(symbol, cid)
+            if fetched:
+                order = fetched
+        logger.info(f"Orden {order_type} {side} {qty} {symbol} - id {order.get('id')} ({cid})")
+        return self._order_result(symbol, side, qty, order, cid)
+
+    async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> Optional[OrderResult]:
+        if self.dry_run or self._simulation_mode or not self._trade:
+            return None
+        order = await self._find_order(symbol, client_order_id)
+        if not order:
+            return None
+        return self._order_result(symbol, order.get("side", ""), float(order.get("amount") or 0), order, client_order_id)
+
+    async def place_market_order(self, symbol: str, side: str, quantity: float,
+                                 client_order_id: Optional[str] = None) -> OrderResult:
+        cid = client_order_id or new_client_order_id()
+        if self.dry_run or self._simulation_mode:
+            price_data = await self.get_price(symbol)
+            if not price_data:
+                return OrderResult(success=False, symbol=symbol, side=side, quantity=quantity,
+                                   status="failed", error="Sin precio", client_order_id=cid, simulated=True)
+            # Al comprar se paga el ask, al vender se recibe el bid
+            px = (price_data.ask if side == "buy" else price_data.bid) or price_data.last
+            qty = self.amount_to_precision(symbol, quantity)
+            result = self._simulate_order(symbol, side, qty, px, cid)
+            if result.success:
+                logger.info(f"[PAPEL] Mercado {side} {qty:.6f} {symbol} @ {px:,.4f}")
+            return result
+        if not self._trade:
+            return OrderResult(success=False, error=f"Sin cuenta de {self.exchange_name} conectada", client_order_id=cid)
+        return await self._send(symbol, side, quantity, "market", None, cid)
+
+    async def place_limit_order(self, symbol: str, side: str, quantity: float, price: float,
+                                client_order_id: Optional[str] = None) -> OrderResult:
+        cid = client_order_id or new_client_order_id()
+        if self.dry_run or self._simulation_mode:
+            result = self._simulate_order(symbol, side, self.amount_to_precision(symbol, quantity), price, cid)
+            if result.success:
+                logger.info(f"[PAPEL] Límite {side} {quantity:.6f} {symbol} @ {price:,.4f}")
+            return result
+        if not self._trade:
+            return OrderResult(success=False, error=f"Sin cuenta de {self.exchange_name} conectada", client_order_id=cid)
+        return await self._send(symbol, side, quantity, "limit", price, cid)
+
+    async def cancel_order(self, order_id: str, symbol: str) -> bool:
+        if self.dry_run or self._simulation_mode:
+            logger.info(f"[PAPEL] Orden cancelada {order_id}")
+            return True
+        if not self._trade:
+            return False
+        try:
+            await self._trade.cancel_order(order_id, self.resolve_symbol(symbol))
+            logger.info(f"Cancelled order {order_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error cancelling order: {e}")
+            return False
+
+    # ── Cuenta ──
 
     async def get_balance(self) -> Dict[str, float]:
-        """Get account balances."""
         if self.dry_run or self._simulation_mode:
-            return self._simulated_balance
-
-        if not self._exchange or not self.api_key:
-            return self._simulated_balance
-
-        try:
-            balance = await self._exchange.fetch_balance()
-            return {
-                currency: data['free']
-                for currency, data in balance.items()
-                if isinstance(data, dict) and data.get('free', 0) > 0
-            }
-
-        except Exception as e:
-            logger.error(f"Error fetching balance: {e}")
-            return self._simulated_balance
+            return dict(self._simulated_balance)
+        if not self._trade:
+            raise RuntimeError(f"Sin cuenta de {self.exchange_name} conectada")
+        balance = await self._trade.fetch_balance()
+        free = balance.get("free") or {}
+        return {cur: float(v) for cur, v in free.items() if v and float(v) > 0}
 
     async def get_positions(self) -> List[Position]:
-        """Get open positions."""
         if self.dry_run or self._simulation_mode:
             return list(self._simulated_positions.values())
-
-        # For spot trading, positions are derived from non-zero balances
         balance = await self.get_balance()
         positions = []
-
         for currency, amount in balance.items():
-            if currency not in ['USD', 'USDT', 'USDC', 'BUSD'] and amount > 0:
-                symbol = f"{currency}/USDT"
-                price_data = await self.get_price(symbol)
-                if price_data:
-                    positions.append(Position(
-                        symbol=symbol,
-                        side="long",
-                        quantity=amount,
-                        entry_price=0,  # Unknown for spot
-                        current_price=price_data.last
-                    ))
-
+            if currency in ('USD', 'USDT', 'USDC', 'BUSD', 'FDUSD'):
+                continue
+            symbol = f"{currency}/USDT"
+            price_data = await self.get_price(symbol)
+            if price_data:
+                positions.append(Position(symbol=symbol, side="long", quantity=amount,
+                                          entry_price=0, current_price=price_data.last))
         return positions
 
     def is_market_open(self) -> bool:
         """Crypto markets are always open."""
         return True
-
-    async def cancel_order(self, order_id: str, symbol: str) -> bool:
-        """Cancel an open order."""
-        if self.dry_run or self._simulation_mode:
-            logger.info(f"[SIMULATED] Cancelled order {order_id}")
-            return True
-
-        if not self._exchange or not self.api_key:
-            return False
-
-        try:
-            await self._exchange.cancel_order(order_id, symbol)
-            logger.info(f"Cancelled order {order_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error cancelling order: {e}")
-            return False
-
-    @property
-    def is_simulating(self) -> bool:
-        """Check if adapter is in simulation mode."""
-        return self._simulation_mode

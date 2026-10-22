@@ -3,38 +3,42 @@
 Izalith Trading System - Main Entry Point
 
 Usage:
-    python run.py                    # Run modules from .env
-    python run.py --modules signals  # Run only signals
-    python run.py --modules signals,dashboard  # Run signals and dashboard
-    python run.py --list-modules     # List available modules
+    python run.py                               # Run modules from .env
+    python run.py --modules signals             # Run only signals
+    python run.py --modules allocator,dashboard # Lab strategies live (paper) + dashboard
+    python run.py --list-modules                # List available modules
 """
 import argparse
 import asyncio
 import signal
 import sys
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Add project to path
 sys.path.insert(0, str(Path(__file__).parent))
+warnings.filterwarnings("ignore", module="yfinance")   # avisos internos de yfinance con pandas 3
 
 from config.settings import get_settings
-from config.assets import ASSETS
+from config.assets import get_asset
 from core.utils.logger import setup_logging, get_logger, log_startup_banner, log_module_status
 from core.utils.database import get_database
 from core.adapters.crypto import CryptoAdapter
 from core.adapters.forex import ForexAdapter
 from core.adapters.stocks import StocksAdapter
 from core.data.feed import UnifiedFeed
+from core.execution import reconcile_pending
 from core.portfolio.tracker import PortfolioTracker
 
 logger = get_logger("main")
+
+SNAPSHOT_SECONDS = 300
 
 
 class IzalithSystem:
     """Main trading system orchestrator."""
 
-    AVAILABLE_MODULES = ["signals", "dca", "grid", "scalper", "dashboard"]
+    AVAILABLE_MODULES = ["signals", "dca", "grid", "scalper", "allocator", "collectors", "dashboard"]
 
     def __init__(self, modules: Optional[List[str]] = None):
         self.settings = get_settings()
@@ -43,366 +47,286 @@ class IzalithSystem:
         self.feed: Optional[UnifiedFeed] = None
         self.portfolio: Optional[PortfolioTracker] = None
         self.db = None
+        self.instances: Dict[str, object] = {}     # módulo -> objeto (para el dashboard)
+        self.unrecorded_orders: List[Dict] = []
+        self.module_errors: Dict[str, str] = {}
         self._tasks: List[asyncio.Task] = []
         self._running = False
+        self._stopped = False
 
     async def initialize(self) -> bool:
-        """Initialize all components."""
+        setup_logging(level=self.settings.log_level, log_dir=self.settings.logs_dir, log_to_file=True)
         log_startup_banner()
-        logger.info(f"Initializing Izalith Trading System...")
-        logger.info(f"Active modules: {', '.join(self.modules)}")
-        logger.info(f"DRY_RUN: {self.settings.dry_run}")
+        mode = "PAPEL (DRY_RUN)" if self.settings.dry_run else "DINERO REAL"
+        logger.info(f"Modo: {mode} · módulos: {', '.join(self.modules)} · zona: {self.settings.trading_timezone}")
 
-        # Setup logging
-        setup_logging(
-            level=self.settings.log_level,
-            log_dir=self.settings.logs_dir,
-            log_to_file=True
-        )
-
-        # Initialize database
         try:
-            self.db = await get_database(self.settings.data_dir / "izalith.db")
+            self.db = await get_database(self.settings.data_dir / "izalith.db", self.settings.trading_timezone)
             log_module_status("Database", "OK", str(self.settings.data_dir / "izalith.db"))
         except Exception as e:
             log_module_status("Database", "ERROR", str(e))
             return False
 
-        # Initialize adapters
         await self._init_adapters()
-
-        # Initialize feed
         self.feed = UnifiedFeed(self.adapters)
+        self.portfolio = PortfolioTracker(self.db, self.feed, initial_cash=self.settings.paper_cash_usd)
+        await self.portfolio.load()
 
-        # Initialize portfolio
-        self.portfolio = PortfolioTracker(self.db, self.feed)
-
+        def market_of(symbol: str) -> str:
+            try:
+                return get_asset(symbol).market.value
+            except ValueError:
+                a = self.feed._get_adapter_for_symbol(symbol)
+                return a.market if a else "crypto"
+        self.unrecorded_orders = await reconcile_pending(self.db, self.adapters, market_of)
         return True
 
     async def _init_adapters(self):
-        """Initialize market adapters."""
-        # Crypto adapter
-        self.adapters["crypto"] = CryptoAdapter(
-            api_key=self.settings.binance_api_key,
-            secret=self.settings.binance_secret,
-            testnet=self.settings.binance_testnet,
-            dry_run=self.settings.dry_run
-        )
-        connected = await self.adapters["crypto"].connect()
-        log_module_status("Crypto", "OK" if connected else "WARN", "Binance" if connected else "Simulation mode")
+        s = self.settings
+        # Con dinero real nunca se permiten precios inventados
+        allow_sim = s.allow_simulation and s.dry_run
+        common = dict(dry_run=s.dry_run, allow_simulation=allow_sim)
+        self.adapters["crypto"] = CryptoAdapter(api_key=s.binance_api_key, secret=s.binance_secret,
+                                                testnet=s.binance_testnet, exchange_id=s.crypto_exchange, **common)
+        self.adapters["forex"] = ForexAdapter(account_id=s.oanda_account_id, api_key=s.oanda_api_key,
+                                              practice=s.oanda_practice, **common)
+        self.adapters["stock"] = StocksAdapter(api_key=s.alpaca_api_key, secret_key=s.alpaca_secret_key,
+                                               paper=s.alpaca_paper, **common)
+        names = {"crypto": s.crypto_exchange.capitalize(), "forex": "OANDA",
+                 "stock": "Alpaca" if s.alpaca_api_key else "Yahoo (sólo papel)"}
+        for market, adapter in self.adapters.items():
+            adapter._simulated_balance = {"USD": s.paper_cash_usd, "USDT": s.paper_cash_usd}
+            await adapter.connect()
+            state = {"real": "OK", "simulado": "WARN", "sin conexión": "WARN"}[adapter.source]
+            detail = names[market] if adapter.source == "real" else f"{adapter.source}: {adapter.last_error or ''}"
+            log_module_status(market.capitalize(), state, detail[:80])
 
-        # Forex adapter
-        self.adapters["forex"] = ForexAdapter(
-            account_id=self.settings.oanda_account_id,
-            api_key=self.settings.oanda_api_key,
-            practice=self.settings.oanda_practice,
-            dry_run=self.settings.dry_run
-        )
-        connected = await self.adapters["forex"].connect()
-        log_module_status("Forex", "OK" if connected else "WARN", "OANDA" if connected else "Limited mode")
-
-        # Stocks adapter
-        self.adapters["stock"] = StocksAdapter(
-            api_key=self.settings.alpaca_api_key,
-            secret_key=self.settings.alpaca_secret_key,
-            paper=self.settings.alpaca_paper,
-            dry_run=self.settings.dry_run
-        )
-        connected = await self.adapters["stock"].connect()
-        log_module_status("Stocks", "OK" if connected else "WARN", "Alpaca" if connected else "Limited mode")
-
-    async def run(self):
-        """Run the trading system."""
-        self._running = True
-
-        # Start modules
-        for module_name in self.modules:
-            if module_name not in self.AVAILABLE_MODULES:
-                logger.warning(f"Unknown module: {module_name}")
-                continue
-
-            try:
-                task = await self._start_module(module_name)
-                if task:
-                    self._tasks.append(task)
-                    log_module_status(module_name.upper(), "OK", "Started")
-            except Exception as e:
-                log_module_status(module_name.upper(), "ERROR", str(e))
-
-        logger.info(f"\nSystem running with {len(self._tasks)} active tasks")
-        logger.info("Press Ctrl+C to stop\n")
-
-        # Wait for all tasks
-        try:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
-        except asyncio.CancelledError:
-            pass
-
-    async def _start_module(self, name: str) -> Optional[asyncio.Task]:
-        """Start a specific module."""
-        config = self._get_module_config()
-
-        if name == "signals":
-            return asyncio.create_task(self._run_signals(config))
-        elif name == "dca":
-            return asyncio.create_task(self._run_dca(config))
-        elif name == "grid":
-            return asyncio.create_task(self._run_grid(config))
-        elif name == "scalper":
-            return asyncio.create_task(self._run_scalper(config))
-        elif name == "dashboard":
-            return asyncio.create_task(self._run_dashboard(config))
-
-        return None
-
-    def _get_module_config(self) -> dict:
-        """Get config dict from settings."""
+    def _module_config(self) -> dict:
+        s = self.settings
         return {
-            "dry_run": self.settings.dry_run,
-            # Signals
-            "signal_types": self.settings.signal_types,
-            "telegram_bot_token": self.settings.telegram_bot_token,
-            "telegram_chat_id": self.settings.telegram_chat_id,
-            "discord_webhook_url": self.settings.discord_webhook_url,
-            # DCA
-            "dca_enabled_assets": self.settings.dca_enabled_assets,
-            "dca_amount_usd": self.settings.dca_amount_usd,
-            "dca_frequency": self.settings.dca_frequency,
-            "dca_day_of_week": self.settings.dca_day_of_week,
-            "dca_hour": self.settings.dca_hour,
-            # Grid
-            "grid_enabled_assets": self.settings.grid_enabled_assets,
-            "grid_total_investment": self.settings.grid_total_investment,
-            "grid_levels": self.settings.grid_levels,
-            "grid_range_low": self.settings.grid_range_low,
-            "grid_range_high": self.settings.grid_range_high,
-            # Scalper
-            "scalper_enabled_assets": self.settings.scalper_enabled_assets,
-            "scalper_strategies": self.settings.scalper_strategies,
-            "scalper_max_position_usd": self.settings.scalper_max_position_usd,
-            "scalper_profit_target_pct": self.settings.scalper_profit_target_pct,
-            "scalper_stop_loss_pct": self.settings.scalper_stop_loss_pct,
-            "scalper_max_daily_trades": self.settings.scalper_max_daily_trades,
-            "scalper_max_daily_loss_usd": self.settings.scalper_max_daily_loss_usd,
-            # Dashboard
-            "dashboard_port": self.settings.dashboard_port,
-            "dashboard_host": self.settings.dashboard_host,
+            "dry_run": s.dry_run,
+            "trading_timezone": s.trading_timezone,
+            "signal_types": s.signal_types,
+            "telegram_bot_token": s.telegram_bot_token,
+            "telegram_chat_id": s.telegram_chat_id,
+            "discord_webhook_url": s.discord_webhook_url,
+            "dca_enabled_assets": s.dca_enabled_assets,
+            "dca_amount_usd": s.dca_amount_usd,
+            "dca_frequency": s.dca_frequency,
+            "dca_day_of_week": s.dca_day_of_week,
+            "dca_hour": s.dca_hour,
+            "grid_enabled_assets": s.grid_enabled_assets,
+            "grid_total_investment": s.grid_total_investment,
+            "grid_levels": s.grid_levels,
+            "grid_range_low": s.grid_range_low,
+            "grid_range_high": s.grid_range_high,
+            "grid_fee_pct": s.grid_fee_pct,
+            "scalper_enabled_assets": s.scalper_enabled_assets,
+            "scalper_strategies": s.scalper_strategies,
+            "scalper_max_position_usd": s.scalper_max_position_usd,
+            "scalper_profit_target_pct": s.scalper_profit_target_pct,
+            "scalper_stop_loss_pct": s.scalper_stop_loss_pct,
+            "scalper_max_daily_trades": s.scalper_max_daily_trades,
+            "scalper_max_daily_loss_usd": s.scalper_max_daily_loss_usd,
+            "allocator_strategies": s.allocator_strategies,
+            "allocator_capital_usd": s.allocator_capital_usd,
+            "allocator_check_minutes": s.allocator_check_minutes,
+            "collectors_interval_minutes": s.collectors_interval_minutes,
+            "dashboard_port": s.dashboard_port,
+            "dashboard_host": s.dashboard_host,
+            "dashboard_token": s.dashboard_token,
         }
 
+    def _watch(self, name: str, task: asyncio.Task) -> None:
+        """Si un módulo muere, que se sepa (antes se perdía en silencio)."""
+        def done(t: asyncio.Task):
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc:
+                logger.error(f"El módulo {name} se detuvo por un error: {exc!r}")
+                self.module_errors[name] = repr(exc)
+            elif self._running:
+                self.module_errors[name] = "terminó sin error pero dejó de correr"
+        task.add_done_callback(done)
+
+    async def run(self):
+        self._running = True
+        config = self._module_config()
+        # Los recolectores van antes que el dashboard para que éste los encuentre
+        order = sorted(self.modules, key=lambda m: (m == "dashboard", m))
+        for name in order:
+            if name not in self.AVAILABLE_MODULES:
+                logger.warning(f"Unknown module: {name}")
+                continue
+            try:
+                coro = await self._start_module(name, config)
+                task = asyncio.create_task(coro, name=name)
+                self._watch(name, task)
+                self._tasks.append(task)
+                log_module_status(name.upper(), "OK", "Started")
+            except Exception as e:
+                log_module_status(name.upper(), "ERROR", str(e))
+
+        snap = asyncio.create_task(self._snapshots(), name="snapshots")
+        self._tasks.append(snap)
+        logger.info(f"System running with {len(self._tasks)} tasks. Press Ctrl+C to stop")
+        await asyncio.gather(*self._tasks, return_exceptions=True)
+
+    async def _snapshots(self):
+        while self._running:
+            try:
+                await self.portfolio.take_snapshot()
+            except Exception as e:
+                logger.warning(f"Snapshot falló: {e}")
+            await asyncio.sleep(SNAPSHOT_SECONDS)
+
+    async def _start_module(self, name: str, config: dict):
+        if name == "signals":
+            return self._run_signals(config)
+        if name == "dca":
+            from modules.dca.bot import DCABot
+            bot = DCABot(self.adapters, self.feed, self.portfolio, self.db, config)
+        elif name == "grid":
+            from modules.grid.bot import GridBot
+            bot = GridBot(self.adapters, self.feed, self.portfolio, self.db, config)
+        elif name == "scalper":
+            from modules.scalper.executor import ScalperExecutor
+            bot = ScalperExecutor(self.adapters, self.feed, self.portfolio, self.db, config)
+        elif name == "allocator":
+            from modules.allocator.bot import AllocatorBot
+            bot = AllocatorBot(self.adapters, self.feed, self.portfolio, self.db, config)
+        elif name == "collectors":
+            from modules.collectors.bot import CollectorsBot
+            bot = CollectorsBot(self.db, config)
+        elif name == "dashboard":
+            return self._run_dashboard(config)
+        else:
+            raise ValueError(name)
+        self.instances[name] = bot
+        return bot.run()
+
     async def _run_signals(self, config: dict):
-        """Run the signals module."""
         from modules.signals.detector import SignalDetector
         from modules.signals.telegram import TelegramNotifier
         from modules.signals.webhook import WebhookNotifier
+        from config.assets import ASSETS
 
-        detector = SignalDetector(
-            feed=self.feed,
-            db=self.db,
-            enabled_signals=config["signal_types"]
-        )
-
-        telegram = TelegramNotifier(
-            bot_token=config["telegram_bot_token"],
-            chat_id=config["telegram_chat_id"]
-        )
-
-        webhook = WebhookNotifier(
-            url=config["discord_webhook_url"]
-        )
-
-        # Get crypto symbols
-        symbols = [s for s in ASSETS.keys() if "/" in s]
-        logger.info(f"Signals monitoring: {', '.join(symbols[:5])}...")
-
-        while self._running:
-            try:
-                signals = await detector.analyze_all(symbols)
-
-                for sig in signals:
-                    # Send notifications
-                    if telegram.enabled:
-                        await telegram.send_signal(sig)
-                        await self.db.mark_signal_sent(sig.db_id, "telegram")
-
-                    if webhook.enabled:
-                        await webhook.send(sig)
-                        await self.db.mark_signal_sent(sig.db_id, "discord")
-
-                await asyncio.sleep(30)  # Check every 30 seconds
-
-            except Exception as e:
-                logger.error(f"Signals error: {e}")
-                await asyncio.sleep(10)
-
-        await telegram.close()
-        await webhook.close()
-
-    async def _run_dca(self, config: dict):
-        """Run the DCA module."""
-        from modules.dca.bot import DCABot
-
-        bot = DCABot(
-            adapters=self.adapters,
-            feed=self.feed,
-            portfolio=self.portfolio,
-            db=self.db,
-            config=config
-        )
-
-        await bot.run()
-
-    async def _run_grid(self, config: dict):
-        """Run the Grid module."""
-        from modules.grid.bot import GridBot
-
-        bot = GridBot(
-            adapters=self.adapters,
-            feed=self.feed,
-            portfolio=self.portfolio,
-            db=self.db,
-            config=config
-        )
-
-        await bot.run()
-
-    async def _run_scalper(self, config: dict):
-        """Run the Scalper module."""
-        from modules.scalper.executor import ScalperExecutor
-
-        executor = ScalperExecutor(
-            adapters=self.adapters,
-            feed=self.feed,
-            portfolio=self.portfolio,
-            db=self.db,
-            config=config
-        )
-
-        await executor.run()
+        detector = SignalDetector(feed=self.feed, db=self.db, enabled_signals=config["signal_types"])
+        self.instances["signals"] = detector
+        telegram = TelegramNotifier(bot_token=config["telegram_bot_token"], chat_id=config["telegram_chat_id"])
+        webhook = WebhookNotifier(url=config["discord_webhook_url"])
+        # Las estables (USDC/USDT) sólo hacen ruido en las señales
+        symbols = [s for s, a in ASSETS.items() if "/" in s and "USDC" not in s]
+        logger.info(f"Signals monitoring: {', '.join(symbols)}")
+        try:
+            while self._running:
+                try:
+                    for sig in await detector.analyze_all(symbols):
+                        if sig.simulated:
+                            continue   # datos inventados: se guardan, pero no se le mandan a nadie
+                        if telegram.enabled and await telegram.send_signal(sig):
+                            await self.db.mark_signal_sent(sig.db_id, "telegram")
+                        if webhook.enabled and await webhook.send(sig):
+                            await self.db.mark_signal_sent(sig.db_id, "discord")
+                    await asyncio.sleep(30)
+                except Exception as e:
+                    logger.error(f"Signals error: {e}")
+                    await asyncio.sleep(10)
+        finally:
+            await telegram.close()
+            await webhook.close()
 
     async def _run_dashboard(self, config: dict):
-        """Run the Dashboard module."""
         import uvicorn
         from modules.dashboard.api import create_app
-
-        app = create_app(
-            feed=self.feed,
-            portfolio=self.portfolio,
-            db=self.db,
-            module_status={"active_modules": self.modules}
-        )
-
-        server_config = uvicorn.Config(
-            app,
-            host=config["dashboard_host"],
-            port=config["dashboard_port"],
-            log_level="warning"
-        )
-
-        server = uvicorn.Server(server_config)
-        logger.info(f"Dashboard available at http://{config['dashboard_host']}:{config['dashboard_port']}")
-
-        await server.serve()
+        app = create_app(system=self, token=config["dashboard_token"])
+        server = uvicorn.Server(uvicorn.Config(app, host=config["dashboard_host"], port=config["dashboard_port"],
+                                               log_level="warning"))
+        logger.info(f"Dashboard: http://{config['dashboard_host']}:{config['dashboard_port']}")
+        try:
+            await server.serve()
+        except SystemExit:
+            # uvicorn sale con SystemExit si el puerto está ocupado: el panel falla, el trading sigue
+            self.module_errors["dashboard"] = f"No pudo abrir el puerto {config['dashboard_port']} (¿ocupado?). Cambia DASHBOARD_PORT."
+            logger.error(self.module_errors["dashboard"])
 
     async def stop(self):
-        """Stop the trading system."""
-        logger.info("\nShutting down...")
+        if self._stopped:
+            return
+        self._stopped = True
+        logger.info("Shutting down...")
         self._running = False
-
-        # Cancel tasks
+        for name, inst in self.instances.items():
+            stop = getattr(inst, "stop", None)
+            if stop:
+                try:
+                    await stop()
+                except Exception:
+                    pass
         for task in self._tasks:
             task.cancel()
-
-        # Wait for cancellation
         await asyncio.gather(*self._tasks, return_exceptions=True)
-
-        # Disconnect adapters
-        for name, adapter in self.adapters.items():
-            await adapter.disconnect()
-
-        # Disconnect database
+        # Orden: foto final (con precios reales) → adaptadores → base de datos
+        if self.portfolio and self.db and self.db.is_connected:
+            try:
+                await self.portfolio.take_snapshot()
+            except Exception as e:
+                logger.warning(f"Snapshot final falló: {e}")
+        for adapter in self.adapters.values():
+            try:
+                await adapter.disconnect()
+            except Exception:
+                pass
         if self.db:
             await self.db.disconnect()
-
-        # Take final snapshot
-        if self.portfolio:
-            await self.portfolio.take_snapshot()
-
         logger.info("System stopped. Goodbye!")
 
 
 def parse_args():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Izalith Trading System",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-    python run.py                         # Run with .env settings
-    python run.py --modules signals       # Run only signals module
-    python run.py --modules signals,dashboard  # Run signals + dashboard
-    python run.py --list-modules          # Show available modules
-        """
-    )
-
-    parser.add_argument(
-        "--modules",
-        type=str,
-        help="Comma-separated list of modules to run"
-    )
-
-    parser.add_argument(
-        "--list-modules",
-        action="store_true",
-        help="List available modules and exit"
-    )
-
+    parser = argparse.ArgumentParser(description="Izalith Trading System")
+    parser.add_argument("--modules", type=str, help="Comma-separated list of modules to run")
+    parser.add_argument("--list-modules", action="store_true", help="List available modules and exit")
     return parser.parse_args()
 
 
 async def main():
-    """Main entry point."""
     args = parse_args()
-
     if args.list_modules:
         print("\nAvailable modules:")
-        print("  signals   - Monitor markets and send alerts (Telegram, Discord)")
-        print("  dca       - Dollar Cost Averaging automatic purchases")
-        print("  grid      - Grid trading for range-bound markets")
-        print("  scalper   - Active trading with multiple strategies")
-        print("  dashboard - Web dashboard for monitoring")
-        print("\nExample: python run.py --modules signals,dashboard")
+        print("  signals    - Alertas a Telegram/Discord (no opera)")
+        print("  dca        - Compras periódicas")
+        print("  grid       - Rejilla de compras y ventas en un rango")
+        print("  scalper    - Intradía (en rojo en el laboratorio: sólo papel)")
+        print("  allocator  - Estrategias del laboratorio en vivo, cada una con su capital")
+        print("  collectors - Fotos de funding entre exchanges, prima de Bitso y Polymarket")
+        print("  dashboard  - Panel web")
+        print("\nExample: python run.py --modules allocator,collectors,dashboard")
         return
 
-    # Parse modules
-    modules = None
-    if args.modules:
-        modules = [m.strip() for m in args.modules.split(",")]
-
-    # Create and run system
+    modules = [m.strip() for m in args.modules.split(",")] if args.modules else None
     system = IzalithSystem(modules)
 
-    # Handle signals
-    loop = asyncio.get_event_loop()
-
-    def handle_shutdown():
-        asyncio.create_task(system.stop())
-
+    loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
-            loop.add_signal_handler(sig, handle_shutdown)
-        except NotImplementedError:
-            # Windows doesn't support add_signal_handler
-            pass
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(system.stop()))
+        except (NotImplementedError, RuntimeError):
+            pass  # Windows: Ctrl+C llega como KeyboardInterrupt / CancelledError
 
     try:
         if await system.initialize():
             await system.run()
-    except KeyboardInterrupt:
-        await system.stop()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
     except Exception as e:
         logger.error(f"Fatal error: {e}")
+    finally:
         await system.stop()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
