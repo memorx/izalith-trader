@@ -69,6 +69,10 @@ def summarize(returns: pd.Series, cash_returns: Optional[pd.Series] = None,
     yearly = (1 + r).resample("YE").prod() - 1
 
     out = {
+        "n_obs": int(len(r)),
+        "ppy": float(ppy),
+        "skew": float(r.skew()) if len(r) > 3 else 0.0,
+        "kurtosis": float(r.kurt() + 3) if len(r) > 4 else 3.0,   # no excedente: normal = 3
         "start": r.index[0].date().isoformat(),
         "end": r.index[-1].date().isoformat(),
         "years": round(years, 2),
@@ -111,3 +115,31 @@ def trade_stats(net_returns) -> Dict:
         "profit_factor": float(gross_win / gross_loss) if gross_loss > 0 else float("inf"),
         "expectancy_pct": float(r.mean() * 100),
     }
+
+
+def deflated_sharpe(sharpe_ann: float, ppy: float, n_obs: int, skew: float, kurt: float,
+                    n_trials: int) -> float:
+    """
+    Probabilidad de que un Sharpe (o ratio de información) sea real y no el mejor de n_trials
+    intentos sin ventaja. Bailey y López de Prado (2014), "The Deflated Sharpe Ratio".
+
+    Bajo la hipótesis de azar, cada Sharpe estimado con T observaciones tiene varianza ~1/(T-1);
+    el mejor de n_trials se espera en E[max] de n_trials normales. Más de 0.95 = probablemente
+    no fue suerte. Se corrige por asimetría y colas gordas de los rendimientos.
+    """
+    from statistics import NormalDist
+    nd = NormalDist()
+    if n_trials < 1 or n_obs < 30 or not np.isfinite(sharpe_ann):
+        return float("nan")
+    sr = sharpe_ann / np.sqrt(ppy)
+    euler = 0.5772156649
+    if n_trials == 1:
+        e_max = 0.0
+    else:
+        e_max = (1 - euler) * nd.inv_cdf(1 - 1 / n_trials) + euler * nd.inv_cdf(1 - 1 / (n_trials * np.e))
+    sr0 = e_max / np.sqrt(n_obs - 1)
+    denom = 1 - skew * sr + (kurt - 1) / 4 * sr ** 2
+    if denom <= 0:
+        return float("nan")
+    z = (sr - sr0) * np.sqrt(n_obs - 1) / np.sqrt(denom)
+    return float(nd.cdf(z))

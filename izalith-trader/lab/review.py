@@ -34,7 +34,7 @@ import pandas as pd
 
 from core.utils.logger import get_logger
 from lab.catalog import CATALOG, NIVELES, Ctx, Spec
-from lab.metrics import summarize, drawdown_series
+from lab.metrics import summarize, drawdown_series, deflated_sharpe
 
 logger = get_logger("lab.review")
 
@@ -90,7 +90,7 @@ def evaluate(spec: Spec, ctx: Ctx, robustness: bool = True) -> dict:
         "key": spec.key, "nombre": spec.nombre, "nivel": spec.nivel, "nivel_nombre": NIVELES[spec.nivel],
         "mercado": spec.mercado, "donde": spec.donde, "idea": spec.idea, "riesgos": spec.riesgos,
         "capital_min_usd": spec.capital_min_usd, "frecuencia": spec.frecuencia, "tipo": spec.tipo,
-        "datos": spec.datos, "params": spec.params,
+        "datos": spec.datos, "params": spec.params, "inventada": spec.inventada,
     }
     if spec.run is None:
         entry["semaforo"] = "investigacion"
@@ -148,6 +148,8 @@ def evaluate(spec: Spec, ctx: Ctx, robustness: bool = True) -> dict:
 
     # Una caída de más de 85% es quiebra en la práctica (y con apalancamiento, liquidación)
     checks["sin_riesgo_de_ruina"] = full["max_drawdown"] > -0.85
+    # Con menos de 3 años no hay ni un ciclo completo para juzgar
+    checks["historial_suficiente"] = full["years"] >= 3
     if "supervivencia" in str(out.extra.get("aviso", "")):
         checks["sin_sesgo_conocido"] = False
     if spec.tipo == "signals":
@@ -163,12 +165,24 @@ def evaluate(spec: Spec, ctx: Ctx, robustness: bool = True) -> dict:
         }
 
     entry["pruebas"] = checks
+    grade(entry)
+    entry["segundos"] = round(time.time() - t0, 1)
+    return entry
+
+
+def grade(entry: dict) -> None:
+    """Semáforo a partir de las pruebas (se vuelve a llamar al agregar la de 'no fue suerte')."""
+    checks = entry.get("pruebas") or {}
+    full = entry.get("metricas") or {}
+    if not checks:
+        return
     passed = sum(bool(v) for v in checks.values())
     core_ok = (checks.get("gana_al_efectivo") and checks.get("aguanta_doble_costo", True)
-               and checks["sin_riesgo_de_ruina"])
-    if spec.tipo == "dca":
+               and checks.get("sin_riesgo_de_ruina", True))
+    if entry["tipo"] == "dca":
         # DCA no es para ganarle al mercado: se califica por su TIR contra el efectivo
-        entry["semaforo"] = "verde" if out.extra.get("irr", 0) > full["cash_cagr"] and core_ok else "rojo"
+        irr = (entry.get("extra") or {}).get("irr", 0) or 0
+        entry["semaforo"] = "verde" if irr > full.get("cash_cagr", 0) and core_ok else "rojo"
     elif len(checks) >= 6 and passed == len(checks):
         entry["semaforo"] = "verde"
     elif core_ok and passed >= len(checks) - 1:
@@ -176,8 +190,46 @@ def evaluate(spec: Spec, ctx: Ctx, robustness: bool = True) -> dict:
     else:
         entry["semaforo"] = "rojo"
 
-    entry["segundos"] = round(time.time() - t0, 1)
-    return entry
+
+def apply_luck_test(results: list, ctx: Ctx) -> None:
+    """
+    Prueba de "no fue suerte" para las estrategias inventadas.
+
+    Se mide el ratio de información de la idea contra su versión base (lo que harías sin la
+    idea) y se deflacta por el número de ideas que se probaron. Si la base es "cash", es el
+    Sharpe normal contra el efectivo.
+    """
+    invented = [e for e in results if e.get("inventada") and e.get("metricas")]
+    n_trials = max(1, len([s for s in CATALOG if s.inventada]))
+    for e in invented:
+        spec = next(s for s in CATALOG if s.key == e["key"])
+        out = spec.run(ctx, **spec.params)
+        r = out.returns
+        if spec.base == "cash":
+            base_r = ctx.cash_for(r.index)
+            base_name = "el efectivo"
+        elif spec.base == "benchmark" and out.benchmark is not None:
+            base_r = out.benchmark.pct_change().reindex(r.index).fillna(0.0)
+            base_name = out.benchmark_name
+        else:
+            bspec = next(s for s in CATALOG if s.key == spec.base)
+            bout = bspec.run(ctx, **bspec.params)
+            base_r = bout.returns
+            base_name = bspec.nombre
+        both = pd.concat([r, base_r], axis=1, keys=["s", "b"]).dropna()
+        both = both[both.index >= max(r.index[0], base_r.index[0])]
+        excess = both["s"] - both["b"]
+        ppy = len(excess) / max((excess.index[-1] - excess.index[0]).days / 365.25, 1e-9)
+        sd = excess.std()
+        ir = float(excess.mean() / sd * np.sqrt(ppy)) if sd > 0 else 0.0
+        skew = float(excess.skew()) if len(excess) > 3 else 0.0
+        kurt = float(excess.kurt() + 3) if len(excess) > 4 else 3.0
+        dsr = deflated_sharpe(ir, ppy, len(excess), skew, kurt, n_trials)
+        e["contra_base"] = {"base": spec.base, "base_nombre": base_name, "ratio_informacion": ir,
+                            "rend_extra_anual": float(excess.mean() * ppy), "ideas_probadas": n_trials}
+        e["prob_no_suerte"] = None if dsr != dsr else dsr
+        e.setdefault("pruebas", {})["no_es_suerte"] = bool(dsr == dsr and dsr >= 0.95)
+        grade(e)
 
 
 def _pct(x, digits=1):
@@ -240,7 +292,9 @@ def write_markdown(report: dict) -> None:
                            "aguanta_doble_costo": "doble costo", "aguanta_ejecutar_tarde": "ejecutar tarde",
                            "parametros_robustos": "parámetros vecinos", "sin_riesgo_de_ruina": "caída < 85%",
                            "sin_sesgo_conocido": "sin sesgo conocido",
-                           "suficientes_operaciones": "30+ operaciones"}
+                           "suficientes_operaciones": "30+ operaciones",
+                           "historial_suficiente": "3+ años de historial",
+                           "no_es_suerte": "no fue suerte"}
                 lines.append("- **Pruebas:** " + " · ".join(
                     f"{'✅' if v else '❌'} {nombres.get(k, k)}" for k, v in e["pruebas"].items()))
             if e.get("extra", {}).get("aviso"):
@@ -306,6 +360,7 @@ def main():
     if previous:
         merged = {**previous, **{e["key"]: e for e in results}}
         results = [merged[s.key] for s in CATALOG if s.key in merged]
+    apply_luck_test(results, ctx)
 
     report = {"generado": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "estrategias": results}
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
