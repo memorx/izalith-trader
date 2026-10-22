@@ -41,6 +41,7 @@ COSTS = {
     "us_etf": Costs(fee=0.0001, slippage=0.0003),     # IBKR: ~0.005 USD por acción
     "altcoin_spot": Costs(fee=0.001, slippage=0.0015),
     "altcoin_perp": Costs(fee=0.0005, slippage=0.0015),
+    "intl_etf": Costs(fee=0.0001, slippage=0.0010),   # ETFs de país: spreads más anchos que SPY
 }
 
 

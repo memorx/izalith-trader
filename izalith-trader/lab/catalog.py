@@ -249,6 +249,99 @@ def s_rsi2(ctx: Ctx, asset="SPY", entry=10, exit_sma=5, trend_sma=200) -> Output
     return _weights_output(ctx, px, t, ctx.cost("us_etf"), asset, cash=ctx.cash_for(px.index))
 
 
+# ══════════ Estrategias: países (Latinoamérica, Asia, África, Europa...) ══════════
+#
+# Todos son ETFs de país que cotizan en EE.UU.: se compran desde IBKR viviendo en México o Canadá.
+
+PAISES = {
+    # Latinoamérica
+    "EWW": "México", "EWZ": "Brasil", "ECH": "Chile", "EPU": "Perú", "ARGT": "Argentina",
+    # Asia
+    "EWJ": "Japón", "EWY": "Corea", "EWT": "Taiwán", "INDA": "India", "MCHI": "China", "EWH": "Hong Kong",
+    "EWS": "Singapur", "EWM": "Malasia", "THD": "Tailandia", "EIDO": "Indonesia", "EPHE": "Filipinas", "VNM": "Vietnam",
+    # África y Medio Oriente
+    "EZA": "Sudáfrica", "AFK": "África", "KSA": "Arabia Saudita", "TUR": "Turquía", "UAE": "Emiratos", "QAT": "Qatar",
+    # Europa
+    "EWG": "Alemania", "EWU": "Reino Unido", "EWQ": "Francia", "EWP": "España", "EWI": "Italia", "EPOL": "Polonia",
+    "GREK": "Grecia",
+    # Otros desarrollados
+    "SPY": "EE.UU.", "EWC": "Canadá", "EWA": "Australia",
+}
+LATAM = ["EWW", "EWZ", "ECH", "EPU", "ARGT"]
+EMERGENTES = ["EWW", "EWZ", "ECH", "EPU", "ARGT", "EWY", "EWT", "INDA", "MCHI", "EWM", "THD", "EIDO",
+              "EPHE", "VNM", "EZA", "AFK", "KSA", "TUR", "UAE", "QAT", "EPOL", "GREK"]
+AVISO_PAISES = ("Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), "
+                "que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.")
+
+
+def _country_prices(ctx: Ctx, tickers: List[str]) -> pd.DataFrame:
+    px = ctx.etf_close(tickers)
+    # Las fechas de Yahoo traen días festivos distintos por país: se rellena hacia adelante dentro de cada ETF
+    return px.sort_index().ffill(limit=5)
+
+
+def s_paises_momentum(ctx: Ctx, top=4, lookback=252, skip=21) -> Output:
+    """
+    Cada mes se queda con los 4 países que más subieron en 12 meses (sin contar el último mes),
+    sólo si además le ganaron al efectivo; si ninguno, efectivo. Momentum entre países:
+    documentado en Asness, Moskowitz y Pedersen (2013), "Value and Momentum Everywhere".
+    """
+    tickers = list(PAISES)
+    px = _country_prices(ctx, tickers)
+    cash = ctx.cash_for(px.index)
+    cash_12m = (1 + cash).rolling(lookback).apply(np.prod, raw=True) - 1
+    mom = px.shift(skip) / px.shift(lookback) - 1
+    month_end = last_of_period(px.index, "ME")
+    t = pd.DataFrame(np.nan, index=px.index, columns=px.columns)
+    for ts in px.index[month_end.to_numpy()]:
+        row = pd.Series(0.0, index=px.columns)
+        m = mom.loc[ts].dropna()
+        m = m[m > (cash_12m.get(ts, 0.0) or 0.0)]
+        for tk in m.nlargest(top).index:
+            row[tk] = 1.0 / top
+        t.loc[ts] = row
+    out = _weights_output(ctx, px, t, ctx.cost("intl_etf"), "SPY", bench_name="Comprar y aguantar SPY", cash=cash)
+    out.extra["aviso"] = AVISO_PAISES
+    return out
+
+
+def s_paises_tendencia(ctx: Ctx, months=10, universe="emergentes") -> Output:
+    """Partes iguales en cada país emergente, pero cada uno sólo cuando está arriba de su promedio de 10 meses."""
+    tickers = EMERGENTES if universe == "emergentes" else LATAM
+    px = _country_prices(ctx, tickers)
+    cash = ctx.cash_for(px.index)
+    month_end = last_of_period(px.index, "ME")
+    monthly = px[month_end.to_numpy()]
+    above = (monthly > monthly.rolling(months).mean()) & monthly.notna()
+    alive = monthly.notna().sum(axis=1).replace(0, np.nan)
+    w_month = above.astype(float).div(alive, axis=0).fillna(0.0)
+    t = pd.DataFrame(np.nan, index=px.index, columns=px.columns)
+    t.loc[w_month.index] = w_month
+    bench = "EWW" if universe == "latam" else "EWZ"
+    out = _weights_output(ctx, px, t, ctx.cost("intl_etf"), bench, cash=cash, min_trade=0.01)
+    out.extra["aviso"] = AVISO_PAISES
+    return out
+
+
+def s_latam_tendencia(ctx: Ctx, months=10) -> Output:
+    """Lo mismo, sólo con Latinoamérica: México, Brasil, Chile, Perú y Argentina (el ETF de Colombia cerró)."""
+    return s_paises_tendencia(ctx, months=months, universe="latam")
+
+
+def s_emergentes_iguales(ctx: Ctx) -> Output:
+    """Comprar el mundo emergente en partes iguales y rebalancear cada trimestre: la referencia sin estrategia."""
+    px = _country_prices(ctx, EMERGENTES)
+    cash = ctx.cash_for(px.index)
+    t = pd.DataFrame(np.nan, index=px.index, columns=px.columns)
+    q = every(t, "QS").to_numpy()
+    alive = px.notna()
+    w = alive.astype(float).div(alive.sum(axis=1).replace(0, np.nan), axis=0).fillna(0.0)
+    t[q] = w[q]
+    out = _weights_output(ctx, px, t, ctx.cost("intl_etf"), "EWZ", cash=cash, min_trade=0.01)
+    out.extra["aviso"] = AVISO_PAISES
+    return out
+
+
 # ══════════ Estrategias: cripto direccional ══════════
 
 def s_cash_plus_btc(ctx: Ctx, btc_weight=0.10) -> Output:
@@ -565,6 +658,28 @@ CATALOG: List[Spec] = [
          "Caídas de 75-80% (2018, 2022) a mitad del camino.", 20, "Semanal",
          s_dca, {"asset": "BTC/USDT"}, {}, tipo="dca", datos="BTC/USDT desde 2017"),
 
+    # ── Países: Latinoamérica, Asia, África, Europa ──
+    Spec("emergentes_iguales", "Mundo emergente en partes iguales", 3, "Acciones de 22 países emergentes",
+         "IBKR (ETFs de país en EE.UU.): desde México y Canadá",
+         "Compra a todos los emergentes por igual (México, Brasil, India, Vietnam, Sudáfrica, Turquía...) y rebalancea cada trimestre.",
+         "Crisis emergentes (2008, 2015, 2022) con caídas de 50%+; devaluaciones.", 1000, "Trimestral",
+         s_emergentes_iguales, {}, {}, datos="22 ETFs de país (Yahoo) desde 1996"),
+    Spec("paises_tendencia", "Tendencia en cada país emergente", 2, "Acciones de 22 países emergentes",
+         "IBKR (ETFs de país en EE.UU.)",
+         "Partes iguales en cada país emergente, pero sólo mientras está arriba de su promedio de 10 meses: sale de los países en crisis.",
+         "Mercados de lado con señales falsas; muchos ETFs, más órdenes.", 2000, "Mensual",
+         s_paises_tendencia, {}, {"months": [6, 8, 12, 14]}, datos="22 ETFs de país desde 1996"),
+    Spec("latam_tendencia", "Tendencia en Latinoamérica", 3, "Acciones de México, Brasil, Chile, Perú y Argentina",
+         "IBKR (EWW, EWZ, ECH, EPU, ARGT)",
+         "La misma regla de tendencia, sólo con 5 países de Latinoamérica.",
+         "Región chica y correlacionada: cuando cae una, caen todas; riesgo político y de moneda.", 500, "Mensual",
+         s_latam_tendencia, {}, {"months": [6, 8, 12, 14]}, datos="5 ETFs de Latinoamérica desde 1996"),
+    Spec("paises_momentum", "Rotación a los países más fuertes", 3, "Acciones de 33 países",
+         "IBKR (ETFs de país en EE.UU.)",
+         "Cada mes se queda con los 4 países que más subieron en un año, si le ganan al efectivo: va a donde está la fuerza (Japón, India, Argentina...).",
+         "Reversiones bruscas entre países; un país puede cerrar su mercado (Rusia 2022).", 1000, "Mensual",
+         s_paises_momentum, {}, {"top": [2, 6], "lookback": [126, 189]}, datos="33 ETFs de país desde 1996"),
+
     # ── Nivel 4: mercados que casi nadie mira (en investigación) ──
     Spec("pred_markets", "Mercados de predicción", 4, "Polymarket / Kalshi",
          "Polymarket (internacional) o Kalshi; revisar acceso por país",
@@ -579,6 +694,11 @@ CATALOG: List[Spec] = [
          "Binance / Hyperliquid (perpetuos de acciones)", "El perpetuo de una acción sigue cotizando cuando la bolsa está cerrada; el hueco contra la apertura del lunes puede repetirse.",
          "Producto nuevo con poco historial y funding muy alto.", 500, "Semanal",
          tipo="investigacion", datos="Pendiente: historial de perpetuos de acciones"),
+    Spec("dolar_cripto_paises", "Dólar cripto por país", 4, "Cripto en monedas locales",
+         "Sólo como información: aprovecharlo exige vivir en ese país",
+         "En países con control de cambios (Argentina, Nigeria, Turquía...) el dólar cripto cotiza arriba del oficial; en Corea BTC tiene la 'prima kimchi'. La prima mide el estrés local.",
+         "No se puede arbitrar desde fuera: controles de capital, KYC local, cuentas bancarias del país.", 0, "Informativo",
+         tipo="investigacion", datos="Recolector: Bitso, Mercado Bitcoin, Buda, Upbit, BtcTurk, VALR, Luno, CoinDCX, Binance P2P"),
     Spec("mxn_premium", "Prima del peso en Bitso", 4, "Cripto / MXN",
          "Bitso + Binance", "En pánicos del peso o de cripto, BTC en pesos se despega del precio global por tipo de cambio.",
          "Hoy la prima está en ±0.05% y las comisiones de Bitso son altas; sólo sirve en días raros.", 2000, "Por evento",
