@@ -187,6 +187,35 @@
   segHandler("#f-nivel", (v) => (fNivel = v));
   segHandler("#f-sem", (v) => (fSem = v));
 
+  let small = null, capital = 200;
+  $("#f-capital").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    capital = Number(b.dataset.v);
+    $("#f-capital").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    renderSmall();
+  });
+
+  function renderSmall() {
+    if (!small) return;
+    const order = ["binance", "ndax", "bitso_usdt", "kraken_limite", "kraken_mercado", "ibkr"];
+    const labels = {
+      binance: "Binance (MX)", ndax: "NDAX (CA)", bitso_usdt: "Bitso USDT (MX)",
+      kraken_limite: "Kraken límite (MX y CA)", kraken_mercado: "Kraken mercado (MX y CA)", ibkr: "IBKR (MX y CA)",
+    };
+    const byKey = {};
+    for (const r of small.filas.filter((f) => f.capital === capital)) {
+      byKey[r.estrategia] = byKey[r.estrategia] || { nombre: r.nombre, nivel: r.nivel, lab: r.cagr_laboratorio };
+      byKey[r.estrategia][r.lugar] = r;
+    }
+    const rows = Object.values(byKey).sort((a, b) => a.nivel - b.nivel);
+    Viz.table($("#small-table"), [
+      { key: "nombre", label: "Estrategia" },
+      { key: "lab", label: "Laboratorio", num: true, render: (r) => fmt.pct(r.lab) },
+      ...order.map((v) => ({ key: v, label: labels[v], num: true,
+        render: (r) => (r[v] ? signed(r[v].cagr) : h("span", { class: "muted", text: "—" })) })),
+    ], rows);
+  }
+
   document.querySelectorAll(".toggle-table").forEach((b) => b.addEventListener("click", () => {
     const id = b.dataset.for, tbl = $("#" + id + "-table"), chart = $("#" + id);
     const showTable = tbl.hidden;
@@ -198,6 +227,7 @@
 
   async function loadLab() {
     lab = await api("/api/lab");
+    try { small = await api("/api/lab-small"); $("#small-panel").hidden = false; renderSmall(); } catch (e) { /* sin análisis de cuenta chica */ }
     const tested = lab.estrategias.filter((e) => e.metricas);
     const counts = { verde: 0, amarillo: 0, rojo: 0 };
     tested.forEach((e) => (counts[e.semaforo] = (counts[e.semaforo] || 0) + 1));

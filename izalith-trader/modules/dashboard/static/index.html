@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>Izalith Trader</title>
-  <link rel="stylesheet" href="/static/styles.css?v=3">
+  <link rel="stylesheet" href="/static/styles.css?v=4">
 </head>
 <body>
 <div class="shell">
@@ -101,6 +101,20 @@
       <div id="risk-map-table" hidden></div>
     </div>
 
+    <div class="panel" id="small-panel" hidden>
+      <div class="panel-head">
+        <h3>Con poco capital: lo que dejan las comisiones de cada lugar</h3>
+        <span class="spacer"></span>
+        <div class="seg" id="f-capital" role="group" aria-label="Capital">
+          <button type="button" data-v="200" aria-pressed="true">$200</button>
+          <button type="button" data-v="1000" aria-pressed="false">$1,000</button>
+          <button type="button" data-v="5000" aria-pressed="false">$5,000</button>
+        </div>
+      </div>
+      <p class="muted small" style="margin-top:-4px">Rendimiento anual de la misma estrategia con las comisiones reales de cada plataforma, el monto mínimo por orden y, en acciones, el dólar mínimo por orden de IBKR. Entre paréntesis, en qué país se puede abrir la cuenta.</p>
+      <div id="small-table"></div>
+    </div>
+
     <div class="panel">
       <div class="panel-head"><h3>Todas las estrategias</h3><span class="muted small">Ordena con clic en el encabezado.</span></div>
       <div id="lab-table"></div>
@@ -170,7 +184,7 @@
   </section>
 </div>
 
-<script src="/static/charts.js?v=3"></script>
-<script src="/static/app.js?v=3"></script>
+<script src="/static/charts.js?v=4"></script>
+<script src="/static/app.js?v=4"></script>
 </body>
 </html>
