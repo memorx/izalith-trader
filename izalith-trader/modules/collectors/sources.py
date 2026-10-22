@@ -144,6 +144,103 @@ def bitso_premium() -> Dict:
     return out
 
 
+# ══════════ Cripto en el mundo: dólar cripto y BTC en moneda local ══════════
+#
+# En cada país se compara el precio local de USDT y de BTC contra el tipo de cambio oficial
+# y el precio global de BTC. Donde hay controles de cambio (Argentina, Nigeria, Turquía...)
+# el dólar cripto cotiza con prima; en Corea BTC suele cotizar arriba ("prima kimchi").
+
+def _median(xs):
+    xs = sorted(x for x in xs if x)
+    return xs[len(xs) // 2] if xs else None
+
+
+def _bitso(book):
+    t = _get(f"https://api.bitso.com/v3/ticker/?book={book}")["payload"]
+    return (float(t["bid"]) + float(t["ask"])) / 2
+
+
+def _buda(market):
+    return float(_get(f"https://www.buda.com/api/v2/markets/{market}/ticker")["ticker"]["last_price"][0])
+
+
+def _p2p(fiat):
+    """Mediana de los 10 mejores anuncios de venta de USDT en Binance P2P (lo que cuesta comprar)."""
+    data = _get("https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search",
+                {"fiat": fiat, "page": 1, "rows": 10, "tradeType": "BUY", "asset": "USDT", "payTypes": []})["data"]
+    return _median([float(a["adv"]["price"]) for a in data])
+
+
+def _upbit(market):
+    return float(_get(f"https://api.upbit.com/v1/ticker?markets={market}")[0]["trade_price"])
+
+
+def _btcturk(pair):
+    return float(_get(f"https://api.btcturk.com/api/v2/ticker?pairSymbol={pair}")["data"][0]["last"])
+
+
+def _mb(symbol):
+    t = _get(f"https://api.mercadobitcoin.net/api/v4/tickers?symbols={symbol}")[0]
+    return (float(t["buy"]) + float(t["sell"])) / 2
+
+
+def _coindcx(market):
+    for t in _get("https://api.coindcx.com/exchange/ticker"):
+        if t["market"] == market:
+            return float(t["last_price"])
+    return None
+
+
+# (país, región, moneda, fuente del dólar cripto, fuente de BTC)
+PAISES_CRIPTO = [
+    ("México", "Latinoamérica", "MXN", ("Bitso", lambda: _bitso("usdt_mxn")), ("Bitso", lambda: _bitso("btc_mxn"))),
+    ("Argentina", "Latinoamérica", "ARS", ("Binance P2P", lambda: _p2p("ARS")), ("Bitso", lambda: _bitso("btc_ars"))),
+    ("Brasil", "Latinoamérica", "BRL", ("Mercado Bitcoin", lambda: _mb("USDT-BRL")), ("Mercado Bitcoin", lambda: _mb("BTC-BRL"))),
+    ("Colombia", "Latinoamérica", "COP", ("Bitso", lambda: _bitso("usdt_cop")), ("Buda", lambda: _buda("btc-cop"))),
+    ("Chile", "Latinoamérica", "CLP", ("Buda (USDC)", lambda: _buda("usdc-clp")), ("Buda", lambda: _buda("btc-clp"))),
+    ("Perú", "Latinoamérica", "PEN", ("Binance P2P", lambda: _p2p("PEN")), ("Buda", lambda: _buda("btc-pen"))),
+    ("Venezuela", "Latinoamérica", "VES", ("Binance P2P", lambda: _p2p("VES")), None),
+    ("Corea", "Asia", "KRW", ("Upbit", lambda: _upbit("KRW-USDT")), ("Upbit", lambda: _upbit("KRW-BTC"))),
+    ("India", "Asia", "INR", ("CoinDCX", lambda: _coindcx("USDTINR")), ("CoinDCX", lambda: _coindcx("BTCINR"))),
+    ("Filipinas", "Asia", "PHP", ("Binance P2P", lambda: _p2p("PHP")), None),
+    ("Vietnam", "Asia", "VND", ("Binance P2P", lambda: _p2p("VND")), None),
+    ("Turquía", "Medio Oriente", "TRY", ("BtcTurk", lambda: _btcturk("USDTTRY")), ("BtcTurk", lambda: _btcturk("BTCTRY"))),
+    ("Egipto", "África", "EGP", ("Binance P2P", lambda: _p2p("EGP")), None),
+    ("Nigeria", "África", "NGN", ("Binance P2P", lambda: _p2p("NGN")), None),
+    ("Kenia", "África", "KES", ("Binance P2P", lambda: _p2p("KES")), None),
+    ("Sudáfrica", "África", "ZAR", ("VALR", lambda: float(_get("https://api.valr.com/v1/public/USDTZAR/marketsummary")["lastTradedPrice"])),
+     ("Luno", lambda: float(_get("https://api.luno.com/api/1/ticker?pair=XBTZAR")["last_trade"]))),
+]
+
+
+def country_premiums() -> Dict:
+    fx = _get("https://open.er-api.com/v6/latest/USD")
+    rates = fx["rates"]
+    bn = _get("https://api.binance.com/api/v3/ticker/bookTicker?symbol=BTCUSDT")
+    btc_usd = (float(bn["bidPrice"]) + float(bn["askPrice"])) / 2
+    rows = []
+    for pais, region, cur, usdt_src, btc_src in PAISES_CRIPTO:
+        row = {"pais": pais, "region": region, "moneda": cur, "oficial": rates.get(cur)}
+        for kind, src in (("usdt", usdt_src), ("btc", btc_src)):
+            if not src:
+                continue
+            name, fn = src
+            try:
+                val = fn()
+            except Exception as e:
+                row[f"{kind}_error"] = str(e)[:120]
+                continue
+            if not val or not row["oficial"]:
+                continue
+            row[f"{kind}_fuente"] = name
+            row[f"{kind}_local"] = val
+            ref = row["oficial"] if kind == "usdt" else btc_usd * row["oficial"]
+            row[f"prima_{kind}_pct"] = (val / ref - 1) * 100
+        rows.append(row)
+    return {"ts": datetime.now(timezone.utc).isoformat(), "btc_usd": btc_usd,
+            "fx_fecha": fx.get("time_last_update_utc"), "paises": rows}
+
+
 # ══════════ Mercados de predicción ══════════
 
 def polymarket_top(limit: int = 30) -> Dict:
@@ -167,7 +264,8 @@ def polymarket_top(limit: int = 30) -> Dict:
 
 def collect_all() -> Dict:
     out = {}
-    for name, fn in (("funding", funding_snapshot), ("bitso", bitso_premium), ("polymarket", polymarket_top)):
+    for name, fn in (("funding", funding_snapshot), ("bitso", bitso_premium), ("paises", country_premiums),
+                     ("polymarket", polymarket_top)):
         try:
             out[name] = fn()
         except Exception as e:
@@ -186,3 +284,6 @@ if __name__ == "__main__":
     b = snap["bitso"]
     print("Bitso:", b.get("pares"), "USDT vs USD:", b.get("prima_usdt_vs_usd_pct"))
     print("Polymarket:", [(m["pregunta"][:50], m["precios"]) for m in snap["polymarket"].get("mercados", [])[:3]])
+    for r in snap["paises"].get("paises", []):
+        print(f"  {r['pais']:10} {r['moneda']}  dólar cripto {r.get('prima_usdt_pct', float('nan')):+6.2f}%  "
+              f"BTC {r.get('prima_btc_pct', float('nan')):+6.2f}%  {r.get('usdt_error', '')}{r.get('btc_error', '')}")

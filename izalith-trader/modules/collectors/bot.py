@@ -42,6 +42,9 @@ class CollectorsBot:
             "acciones": [(r["coin"], r["mark"], round(r["apr"], 4)) for r in f.get("perpetuos_no_cripto", [])[:40]],
             "bitso": [(p["par"], round(p["prima_pct"], 4)) for p in snap.get("bitso", {}).get("pares", [])],
             "usdt_vs_usd": snap.get("bitso", {}).get("prima_usdt_vs_usd_pct"),
+            "paises": [(r["pais"], None if r.get("prima_usdt_pct") is None else round(r["prima_usdt_pct"], 3),
+                        None if r.get("prima_btc_pct") is None else round(r["prima_btc_pct"], 3))
+                       for r in snap.get("paises", {}).get("paises", [])],
         }
         await self.db.kv_set(f"collect:{now:%Y-%m-%dT%H}", compact)
 
