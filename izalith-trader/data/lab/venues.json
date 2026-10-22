@@ -9,7 +9,8 @@
         "Que tu contador confirme cuál es tu residencia fiscal; con eso se elige la entidad de Kraken y de IBKR.",
         "Abre Kraken y usa Kraken Pro, no la app básica (la app cobra 1% por compra).",
         "Deja que el bot use órdenes límite (ALLOCATOR_PASSIVE_ORDERS=true): en Kraken bajan la comisión de 0.80% a 0.40%.",
-        "Con $200, IBKR cobra 1 dólar mínimo por orden: sólo vale la pena para estrategias que operan pocas veces al año, como Faber."
+        "Con $200, IBKR cobra 1 dólar mínimo por orden: sólo vale la pena para estrategias que operan pocas veces al año, como Faber.",
+        "Los mercados de Latinoamérica, Asia, África y Europa se compran desde IBKR con ETFs de país que cotizan en EE.UU. (EWW México, EWZ Brasil, INDA India, VNM Vietnam, EZA Sudáfrica...): no hace falta cuenta en cada país."
       ],
       "plataformas": [
         {"plataforma": "Kraken Pro", "para": "Cripto spot", "deposito": "México: SPEI (se convierte a USD). Canadá: Interac gratis", "minimo": "150 MXN / sin mínimo", "comisiones": "0.40% límite, 0.80% a mercado (baja con volumen: 0.30%/0.60% desde 2,500 dólares al mes)", "api": "La mejor: REST, WebSocket, FIX. El bot ya la soporta (CRYPTO_EXCHANGE=kraken)", "notas": "Sin perpetuos para minoristas en Canadá; en spot no hay problema en ninguno de los dos países"},
