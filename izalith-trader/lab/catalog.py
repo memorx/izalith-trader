@@ -41,23 +41,39 @@ class Ctx:
     """Carga datos una vez y los reparte. Permite multiplicar costos para pruebas de robustez."""
 
     def __init__(self, cost_mult: float = 1.0, lag: int = 1, crypto_since: str = "2017-08-01",
-                 etf_since: str = "1995-01-01", refresh: bool = True):
+                 etf_since: str = "1995-01-01", refresh: bool = True,
+                 venue: Optional[Dict[str, Costs]] = None, capital_usd: Optional[float] = None,
+                 min_fee_usd: float = 0.0, min_order_usd: float = 0.0):
         self.cost_mult = cost_mult
         self.lag = lag
         self.crypto_since = crypto_since
         self.etf_since = etf_since
         self.refresh = refresh
+        # Escenario de cuenta real: costos de un lugar concreto y tamaño de la cuenta
+        self.venue = venue or {}
+        self.capital_usd = capital_usd
+        self.min_fee_usd = min_fee_usd
+        self.min_order_usd = min_order_usd
         self._mem: Dict = {}
 
     def child(self, **kw) -> "Ctx":
-        c = Ctx(**{"cost_mult": self.cost_mult, "lag": self.lag, "crypto_since": self.crypto_since,
-                   "etf_since": self.etf_since, "refresh": False, **kw})
+        base = {"cost_mult": self.cost_mult, "lag": self.lag, "crypto_since": self.crypto_since,
+                "etf_since": self.etf_since, "refresh": False, "venue": self.venue,
+                "capital_usd": self.capital_usd, "min_fee_usd": self.min_fee_usd,
+                "min_order_usd": self.min_order_usd}
+        c = Ctx(**{**base, **kw})
         c._mem = self._mem
         return c
 
     def cost(self, key: str) -> Costs:
-        base = COSTS[key]
+        base = self.venue.get(key, COSTS[key])
         return Costs(fee=base.fee * self.cost_mult, slippage=base.slippage * self.cost_mult)
+
+    def account_kwargs(self) -> Dict:
+        if not self.capital_usd:
+            return {}
+        return {"capital_usd": self.capital_usd, "min_fee_usd": self.min_fee_usd,
+                "min_order_usd": self.min_order_usd}
 
     def _get(self, key, fn):
         if key not in self._mem:
@@ -153,7 +169,7 @@ class Output:
 
 def _weights_output(ctx: Ctx, prices, targets, costs, bench_col, bench_name="", **kw) -> Output:
     cash = kw.pop("cash", None)
-    res = backtest_weights(prices, targets, costs, cash_rate=cash, lag=ctx.lag, **kw)
+    res = backtest_weights(prices, targets, costs, cash_rate=cash, lag=ctx.lag, **ctx.account_kwargs(), **kw)
     # Última decisión de la estrategia (lo que el allocator en vivo tiene que replicar)
     decided = targets.dropna(how="all")
     target_row = decided.iloc[-1].fillna(0.0) if len(decided) else pd.Series(dtype=float)

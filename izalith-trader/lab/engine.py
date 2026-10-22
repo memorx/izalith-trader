@@ -66,6 +66,9 @@ def backtest_weights(
     min_trade: float = 0.0,
     perp_cols: Optional[List[str]] = None,
     borrow_spread: float = 0.0,
+    capital_usd: Optional[float] = None,
+    min_fee_usd: float = 0.0,
+    min_order_usd: float = 0.0,
 ) -> WeightsResult:
     """
     Simula un portafolio que se rebalancea a pesos objetivo.
@@ -84,6 +87,10 @@ def backtest_weights(
             o cobran funding. Las demás columnas son spot: un peso positivo sale del efectivo.
         borrow_spread: costo extra por periodo sobre cash_rate cuando el efectivo queda negativo
             (apalancamiento en spot).
+        capital_usd: tamaño real de la cuenta. Sólo hace falta para cuentas chicas, donde pesan
+            la comisión mínima por orden y el monto mínimo por orden.
+        min_fee_usd: comisión mínima por orden (IBKR: 1 dólar por orden de acciones).
+        min_order_usd: monto mínimo por orden; los ajustes más chicos no se hacen.
     """
     prices = prices.sort_index()
     cols = list(prices.columns)
@@ -145,8 +152,17 @@ def backtest_weights(
             target = np.where(tradable[t], target, 0.0)
             delta = target - w
             delta[np.abs(delta) < min_trade] = 0.0
+            if capital_usd:
+                acct = eq * capital_usd
+                notional = np.abs(delta) * acct
+                delta[notional < max(min_order_usd, 1e-9)] = 0.0
             if np.any(delta != 0):
-                c = float(np.dot(np.abs(delta), cost_vec))
+                if capital_usd and min_fee_usd > 0:
+                    # Cada activo que se mueve es una orden: paga el porcentaje o el mínimo, lo que sea mayor
+                    per_order = np.maximum(np.abs(delta) * cost_vec, np.where(delta != 0, min_fee_usd / acct, 0.0))
+                    c = float(per_order.sum())
+                else:
+                    c = float(np.dot(np.abs(delta), cost_vec))
                 eq *= (1.0 - c)
                 port_rets[t] = (1 + port_rets[t]) * (1 - c) - 1
                 cost_hist[t] = c

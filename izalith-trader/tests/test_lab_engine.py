@@ -104,3 +104,18 @@ def test_summarize_basic():
     assert m["max_drawdown"] == pytest.approx(-0.5)
     assert m["total_return"] == pytest.approx(0.0)
     assert max_drawdown((1 + r).cumprod()) == pytest.approx(-0.5)
+
+
+def test_min_fee_per_order_on_small_account():
+    """Con 200 dólares, 1 dólar de comisión mínima por orden es 0.5% de la cuenta."""
+    px = pd.DataFrame({"A": [100.0] * 6}, index=IDX)
+    t = pd.DataFrame({"A": [1.0] + [np.nan] * 5}, index=IDX)
+    res = backtest_weights(px, t, Costs(fee=0.00001, slippage=0.0), capital_usd=200, min_fee_usd=1.0)
+    assert res.equity.iloc[-1] == pytest.approx(1 - 1 / 200)
+
+
+def test_trades_below_min_order_are_skipped():
+    px = pd.DataFrame({"A": [100.0] * 6}, index=IDX)
+    t = pd.DataFrame({"A": [0.01] + [np.nan] * 5}, index=IDX)   # 2 dólares de 200
+    res = backtest_weights(px, t, FREE, capital_usd=200, min_order_usd=5.0)
+    assert res.rebalances == 0
