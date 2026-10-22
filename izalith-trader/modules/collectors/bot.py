@@ -1,0 +1,65 @@
+"""
+Izalith Trading System - Collectors Bot
+
+Cada N minutos toma una foto de los mercados poco vigilados, la deja en memoria para el
+dashboard y guarda una versión compacta en la base (tabla kv con historial por día) para
+analizarla después: una ventaja sólo se puede probar con historial propio.
+"""
+import asyncio
+from datetime import datetime, timezone
+from typing import Dict, Optional
+
+from core.utils.database import Database
+from core.utils.logger import get_logger
+from . import sources
+
+logger = get_logger("collectors")
+
+
+class CollectorsBot:
+    def __init__(self, db: Database, config: dict):
+        self.db = db
+        self.interval = max(5, int(config.get("collectors_interval_minutes", 15))) * 60
+        self.latest: Dict = {}
+        self._running = False
+
+    async def collect_once(self) -> Dict:
+        snap = await asyncio.to_thread(sources.collect_all)
+        self.latest = snap
+        await self._store(snap)
+        return snap
+
+    async def _store(self, snap: Dict) -> None:
+        """Historial compacto: una fila por hora con lo esencial de cada fuente."""
+        now = datetime.now(timezone.utc)
+        f = snap.get("funding", {})
+        compact = {
+            "ts": now.isoformat(),
+            "mayores": f.get("mayores"),
+            "top": [(r["coin"], round(r["apr"], 4), round(r["volume_24h"])) for r in f.get("top_funding", [])[:15]],
+            "diferencias": [(d["coin"], d["short_en"], d["long_en"], round(d["diferencia_apr"], 4))
+                            for d in f.get("diferencias", [])[:15]],
+            "acciones": [(r["coin"], r["mark"], round(r["apr"], 4)) for r in f.get("perpetuos_no_cripto", [])[:40]],
+            "bitso": [(p["par"], round(p["prima_pct"], 4)) for p in snap.get("bitso", {}).get("pares", [])],
+            "usdt_vs_usd": snap.get("bitso", {}).get("prima_usdt_vs_usd_pct"),
+        }
+        await self.db.kv_set(f"collect:{now:%Y-%m-%dT%H}", compact)
+
+    async def run(self) -> None:
+        self._running = True
+        logger.info(f"Recolectores cada {self.interval // 60} min")
+        while self._running:
+            try:
+                snap = await self.collect_once()
+                errs = {k: v["error"] for k, v in snap.items() if isinstance(v, dict) and v.get("error")}
+                if errs:
+                    logger.warning(f"Recolectores con error: {errs}")
+            except Exception as e:
+                logger.error(f"Recolectores: {e}")
+            await asyncio.sleep(self.interval)
+
+    async def stop(self) -> None:
+        self._running = False
+
+    def get_latest(self) -> Optional[Dict]:
+        return self.latest or None
