@@ -119,3 +119,17 @@ def test_trades_below_min_order_are_skipped():
     t = pd.DataFrame({"A": [0.01] + [np.nan] * 5}, index=IDX)   # 2 dólares de 200
     res = backtest_weights(px, t, FREE, capital_usd=200, min_order_usd=5.0)
     assert res.rebalances == 0
+
+
+def test_deflated_sharpe_penalizes_many_trials():
+    from lab.metrics import deflated_sharpe
+    one = deflated_sharpe(0.5, 252, 2520, 0.0, 3.0, 1)
+    many = deflated_sharpe(0.5, 252, 2520, 0.0, 3.0, 50)
+    assert 0 <= many < one <= 1
+
+
+def test_deflated_sharpe_needs_long_history():
+    from lab.metrics import deflated_sharpe
+    short = deflated_sharpe(1.0, 252, 252, 0.0, 3.0, 7)      # 1 año
+    long = deflated_sharpe(1.0, 252, 252 * 20, 0.0, 3.0, 7)  # 20 años
+    assert short < 0.95 < long

@@ -575,6 +575,8 @@ class Spec:
     grid: Dict[str, List] = field(default_factory=dict)  # vecinos para la prueba de robustez
     tipo: str = "weights"      # weights | signals | dca | investigacion
     datos: str = ""            # qué datos usa el backtest
+    inventada: bool = False    # inventada aquí: además tiene que pasar la prueba de "no fue suerte"
+    base: str = ""             # contra qué se mide la idea: clave del catálogo, "benchmark" o "cash"
 
 
 CATALOG: List[Spec] = [
@@ -711,3 +713,9 @@ def get_spec(key: str) -> Spec:
         if s.key == key:
             return s
     raise KeyError(key)
+
+
+# Las estrategias inventadas viven en lab/secretas.py (usan las ayudas de este archivo)
+from lab.secretas import SECRETAS  # noqa: E402
+
+CATALOG.extend(SECRETAS)
