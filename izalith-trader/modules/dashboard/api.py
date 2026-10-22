@@ -27,6 +27,7 @@ logger = get_logger("dashboard")
 ROOT = Path(__file__).parent.parent.parent
 REPORT_PATH = ROOT / "data" / "lab" / "report.json"
 VENUES_PATH = ROOT / "data" / "lab" / "venues.json"
+SMALL_PATH = ROOT / "data" / "lab" / "small_account.json"
 STATIC_DIR = Path(__file__).parent / "static"
 
 
@@ -165,6 +166,12 @@ def create_app(system=None, token: str = "") -> FastAPI:
         for e in report["estrategias"]:
             light.append({k: v for k, v in e.items() if k not in ("curva", "drawdown", "curva_benchmark")})
         return {"generado": report["generado"], "estrategias": light}
+
+    @app.get("/api/lab-small")
+    async def lab_small():
+        if not SMALL_PATH.exists():
+            raise HTTPException(404, "Corre: python -m lab.small_account")
+        return json.loads(SMALL_PATH.read_text(encoding="utf-8"))
 
     @app.get("/api/lab/{key}")
     async def lab_strategy(key: str):

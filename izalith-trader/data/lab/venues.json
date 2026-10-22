@@ -3,6 +3,21 @@
   "intro": "Dónde se puede abrir cuenta para que el bot opere, según el país donde vives de verdad (residencia fiscal: es una sola y se declara donde realmente vives; México y Canadá intercambian datos de cuentas). Investigado el 22 oct 2026 con fuentes de 2025-2026; lo que no se pudo confirmar está marcado.",
   "paises": [
     {
+      "nombre": "Si pasas medio año en cada país",
+      "recomendacion": "Kraken Pro para cripto e Interactive Brokers para acciones: son de las pocas que aceptan residentes de los dos países y no bloquean el acceso desde ninguno, así el bot funciona igual en México y en Canadá. Binance no opera en Canadá: una cuenta mexicana usada desde Canadá se puede bloquear por la IP. NDAX sólo es para residentes de Canadá. La cuenta se abre a nombre de la residencia fiscal que te confirme tu contador: si vives en los dos países, la decide el tratado México-Canadá (vivienda permanente, centro de intereses), no los días.",
+      "pasos": [
+        "Que tu contador confirme cuál es tu residencia fiscal; con eso se elige la entidad de Kraken y de IBKR.",
+        "Abre Kraken y usa Kraken Pro, no la app básica (la app cobra 1% por compra).",
+        "Deja que el bot use órdenes límite (ALLOCATOR_PASSIVE_ORDERS=true): en Kraken bajan la comisión de 0.80% a 0.40%.",
+        "Con $200, IBKR cobra 1 dólar mínimo por orden: sólo vale la pena para estrategias que operan pocas veces al año, como Faber."
+      ],
+      "plataformas": [
+        {"plataforma": "Kraken Pro", "para": "Cripto spot", "deposito": "México: SPEI (se convierte a USD). Canadá: Interac gratis", "minimo": "150 MXN / sin mínimo", "comisiones": "0.40% límite, 0.80% a mercado (baja con volumen: 0.30%/0.60% desde 2,500 dólares al mes)", "api": "La mejor: REST, WebSocket, FIX. El bot ya la soporta (CRYPTO_EXCHANGE=kraken)", "notas": "Sin perpetuos para minoristas en Canadá; en spot no hay problema en ninguno de los dos países"},
+        {"plataforma": "Interactive Brokers", "para": "ETFs y acciones de EE.UU., Canadá y México", "deposito": "México: SPEI dudoso, wire. Canadá: wire, EFT", "minimo": "US$0", "comisiones": "0.005 USD por acción, mínimo 1 USD por orden", "api": "La más completa (TWS / IB Gateway)", "notas": "El bot todavía no tiene adaptador de IBKR: hoy las acciones corren en papel con Yahoo"}
+      ],
+      "impuestos": "Con medio año en cada país no se eligen las dos: hay una sola residencia fiscal y se declara ahí (el tratado México-Canadá desempata). Las ganancias del bot se declaran en ese país."
+    },
+    {
       "nombre": "Si vives en México",
       "recomendacion": "Lo mínimo: Binance para cripto e Interactive Brokers (IBKR Pro) para acciones, ETFs, BMV y forex. Binance tiene SPEI directo, perpetuos baratos, testnet y la mejor API; IBKR es el único que junta API, bolsa de EE.UU. y México, forex y cuenta de papel, sin mínimo. Para mercados poco comunes: Bitso como puerta de entrada (SPEI gratis, retiros de USDC baratos) hacia Hyperliquid y, con montos chicos, Polymarket.",
       "pasos": [
