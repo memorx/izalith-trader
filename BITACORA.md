@@ -11,7 +11,7 @@
 *(Esta sección se reescribe completa en cada actualización.)*
 
 **Hecho y funcionando**
-- Laboratorio (`lab/`): 21 estrategias en el catálogo, evaluadas con `python -m lab.review` (reporte 2026-10-22 17:18 UTC). 9 en verde, 3 en amarillo, 5 en rojo y 4 en investigación.
+- Laboratorio (`lab/`): 26 estrategias en el catálogo, evaluadas con `python -m lab.review`. 9 en verde, 7 en amarillo (4 son de países, por sesgo de supervivencia), 5 en rojo y 5 en investigación.
   - Verde: 60/40, efectivo+10% BTC, DCA S&P, Faber, momentum dual, RSI-2, tendencia BTC, tendencia BTC+ETH con volatilidad controlada y DCA BTC.
   - Rojo: las 3 del scalper original, BTC 2x (caída de -93%) y carry en altcoins.
 - Análisis de cuenta chica (`python -m lab.small_account`): las mismas estrategias con 200, 1,000 y 5,000 dólares y las comisiones reales de cada plataforma. Se ve en el panel.
