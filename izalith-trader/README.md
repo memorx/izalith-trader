@@ -1,204 +1,99 @@
-# Izalith Trading System
+# Izalith Trader
 
-A modular trading system with 4 operation modes that can be activated independently.
+Bot de trading personal: un **laboratorio** que prueba estrategias con datos reales y
+costos reales, y un **bot en vivo** que corre en papel (o con dinero real) sólo las que
+pasan el laboratorio. Más un panel para verlo todo.
 
-## Modules
+La regla del proyecto: **ninguna estrategia toca dinero sin pasar primero por el
+laboratorio y luego por un mes en papel.**
 
-| Module | Description | Risk Level |
-|--------|-------------|------------|
-| **SIGNALS** | Alerts to Telegram, you decide | Zero |
-| **DCA** | Automatic periodic purchases | Low |
-| **GRID** | Grid trading on stablecoins | Medium |
-| **SCALPER** | Active multi-asset trading | High |
-
-## Supported Markets
-
-- **Crypto** (Binance via ccxt): BTC/USDT, ETH/USDT, SOL/USDT, DOGE/USDT, USDT/USDC
-- **Forex** (OANDA API v3): EUR_USD, GBP_USD
-- **Stocks/ETFs** (Alpaca): VTI, VOO, SPY
-
-## Quick Start
+## Arranque rápido
 
 ```bash
-# 1. Clone and navigate
 cd izalith-trader
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt     # Windows
+cp .env.example .env                                        # y edítalo
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# 1. Evaluar todas las estrategias (baja datos la primera vez; ~10 min)
+.venv\Scripts\python -m lab.review
 
-# 3. Copy environment template
-cp .env.example .env
+# 2. Correr en papel lo que pasó + recolectores + panel
+.venv\Scripts\python run.py --modules allocator,collectors,signals,dashboard
 
-# 4. Edit .env with your API keys (optional - works without for signals/dashboard)
-
-# 5. Run
-python run.py                          # Run modules from .env
-python run.py --modules signals        # Run only signals
-python run.py --modules dashboard      # Run only dashboard
-python run.py --modules signals,dashboard  # Run both
-python run.py --list-modules           # List available modules
+# 3. Abrir el panel
+#    http://127.0.0.1:8765
 ```
 
-## Configuration (.env)
+Sin ninguna llave ya funciona en papel: cripto con precios públicos del exchange y
+acciones con precios de Yahoo. Para dinero real hacen falta cuentas (ver abajo).
 
-Key settings:
+## Qué hay
+
+| Parte | Para qué |
+|---|---|
+| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 21 estrategias de seguras a arriesgadas, con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
+| `modules/allocator` | Corre en vivo las estrategias de portafolio del laboratorio con **el mismo código** del backtest; cada una con su propio capital. |
+| `modules/collectors` | Fotos de mercados poco vigilados cada 15 min: funding de Binance, Bybit y Hyperliquid y sus diferencias, perpetuos de acciones y oro 24/7, prima del peso en Bitso, Polymarket. Guarda historial por hora. |
+| `modules/signals` | Alertas a Telegram/Discord. Nunca manda alertas calculadas con precios inventados. |
+| `modules/dca` | Compras periódicas por monto, en la zona horaria configurada, sin repetir un turno tras un reinicio. |
+| `modules/grid` | Rejilla de compras/ventas. Se niega a arrancar si cada vuelta pierde por comisiones. |
+| `modules/scalper` | Las estrategias intradía originales. **En rojo en el laboratorio**: sólo papel. |
+| `modules/dashboard` | Panel local: resumen, mapa de riesgo de las estrategias, lo que corre en vivo, mercados poco vigilados y dónde abrir cuenta. |
+
+## El semáforo del laboratorio
+
+Cada estrategia se califica con datos de años y después de costos:
+
+1. le gana al efectivo (T-bill de EE.UU.)
+2. también en el último 40% del historial, que no se usó para diseñarla
+3. aguanta el doble de comisiones
+4. aguanta operar un día tarde
+5. funciona con parámetros vecinos (no es suerte de un número)
+6. nunca cayó más de 85% (más que eso es quiebra o liquidación)
+
+Verde = pasa todo. Amarillo = casi. Rojo = no sirve como está. Un sesgo conocido de la
+prueba (supervivencia en altcoins) deja la estrategia en amarillo como máximo.
+
+Resultados del 22 oct 2026: ver `docs/ESTRATEGIAS.md` o la pestaña Estrategias del panel.
+
+## Seguridad del dinero
+
+- `DRY_RUN=true` por defecto: órdenes de papel con precios reales y comisiones simuladas.
+- Con dinero real **nunca** se usan precios inventados; si una fuente falla, no hay dato y no se opera.
+- Cada orden se anota antes de mandarla con un id propio. Si el bot se cae a media orden,
+  al volver le pregunta al exchange qué pasó en lugar de mandarla otra vez.
+- Las posiciones, stops y P&L viven en la base de datos: un reinicio no deja posiciones huérfanas.
+- El panel sólo escucha en esta computadora y no tiene botones que operen.
+- Las llaves de API van en `.env` (nunca en git), y sólo con permiso de operar, no de retirar.
+
+## Dónde abrir cuenta (resumen)
+
+- **Si vives en México:** Binance (cripto) + Interactive Brokers (acciones, ETFs, BMV, forex).
+  Bitso como entrada en pesos.
+- **Si vives en Canadá:** Kraken (`CRYPTO_EXCHANGE=kraken`) + IBKR Canada. Sin perpetuos.
+
+Detalle, comisiones, impuestos y lo que falta confirmar: pestaña "Dónde abrir cuenta" del
+panel (`data/lab/venues.json`).
+
+## Pendiente
+
+- Adaptador de **Interactive Brokers** (es la cuenta de acciones recomendada para México y
+  Canadá; hoy el bot usa Alpaca o Yahoo en papel).
+- Adaptador de **perpetuos** (Binance USD-M / Hyperliquid) para correr en vivo el carry y las
+  estrategias con cortos.
+- Backtests de los mercados en investigación cuando los recolectores junten historial.
+
+## Pruebas
 
 ```bash
-# IMPORTANT - Always start with these ON
-DRY_RUN=true
-BINANCE_TESTNET=true
-OANDA_PRACTICE=true
-ALPACA_PAPER=true
-
-# Modules to activate
-ACTIVE_MODULES=signals,dashboard
-
-# Optional: Add API keys for real data
-BINANCE_API_KEY=your_key
-BINANCE_SECRET=your_secret
+.venv\Scripts\python -m pytest tests/ -q
 ```
 
-## Dashboard
+Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de largos y
+cortos, cierres parciales, efectivo tras reinicio, el día local, órdenes duplicadas, el
+horario del DCA y la validación del grid.
 
-Access at: http://localhost:8080
+## Licencia
 
-Features:
-- Live price updates (WebSocket)
-- Open positions tracking
-- Recent signals display
-- Portfolio value chart (24h)
-- Market status indicators
-
-## Module Details
-
-### Signals Module
-Monitors markets and detects:
-- RSI oversold/overbought
-- MACD crossovers
-- Bollinger Band touches
-- Volume spikes
-- Price breakouts
-
-Sends alerts to:
-- Telegram (configure `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`)
-- Discord webhook (configure `DISCORD_WEBHOOK_URL`)
-
-### DCA Module
-Dollar Cost Averaging with configurable:
-- Assets to buy
-- Purchase frequency (hourly, daily, weekly, monthly)
-- Amount per purchase
-
-### Grid Module
-Grid trading for range-bound markets:
-- Configurable price range
-- Number of grid levels
-- Automatic order placement
-
-### Scalper Module
-Active trading with strategies:
-- Momentum (EMA crossovers + volume)
-- Mean Reversion (Bollinger Bands)
-- Breakout (24h high/low)
-
-Built-in risk management:
-- Max position size
-- Daily trade limits
-- Daily loss limits
-- Stop loss / Take profit
-
-## Project Structure
-
-```
-izalith-trader/
-├── config/           # Settings and asset definitions
-├── core/             # Shared infrastructure
-│   ├── adapters/     # Exchange connections
-│   ├── data/         # Indicators and unified feed
-│   ├── portfolio/    # Position tracking
-│   └── utils/        # Database and logging
-├── modules/          # Trading modules
-│   ├── signals/      # Alert system
-│   ├── dca/          # Dollar cost averaging
-│   ├── grid/         # Grid trading
-│   ├── scalper/      # Active trading
-│   └── dashboard/    # Web interface
-├── data/             # SQLite database
-├── logs/             # Log files
-└── run.py            # Main entry point
-```
-
-## Safety Notes
-
-1. **DRY_RUN=true by default** - No real trades without explicit change
-2. **Testnet/Paper by default** - All exchanges use test environments
-3. **Never commit .env** - API keys must stay private
-4. **Start with signals only** - Observe before automating
-
-## Testing
-
-The project includes a comprehensive test suite:
-
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test files
-python -m pytest tests/test_indicators.py -v   # Technical indicators
-python -m pytest tests/test_adapters.py -v     # Market adapters
-python -m pytest tests/test_signals.py -v      # Signal detection
-```
-
-**Test Coverage:**
-- 45 tests covering indicators, adapters, and signal detection
-- Tests run in isolation using mocks and simulation mode
-- No API keys required for testing
-
-## API Endpoints (Dashboard)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/status` | GET | System status and active modules |
-| `/api/prices` | GET | Current prices for all assets |
-| `/api/positions` | GET | Open positions |
-| `/api/trades` | GET | Recent trade history |
-| `/api/signals` | GET | Recent detected signals |
-| `/ws/prices` | WS | Real-time price updates |
-
-## Technical Indicators
-
-Calculated automatically on OHLCV data:
-
-| Indicator | Period | Description |
-|-----------|--------|-------------|
-| SMA | 20 | Simple Moving Average |
-| EMA | 5, 20 | Exponential Moving Average |
-| RSI | 14 | Relative Strength Index (0-100) |
-| MACD | 12/26/9 | Moving Average Convergence Divergence |
-| Bollinger Bands | 20, 2std | Upper, Middle, Lower bands |
-| ATR | 14 | Average True Range |
-| Volume SMA | 20 | Volume moving average for spike detection |
-
-## Simulation Mode
-
-When API keys are not configured or connection fails, adapters automatically switch to simulation mode:
-
-- Generates realistic random-walk prices
-- Maintains price continuity across calls
-- Simulates order execution with proper fills
-- Useful for testing and development
-
-## Troubleshooting
-
-**NumPy Warning**: If you see a NumPy 1.x vs 2.x warning, you can ignore it or run:
-```bash
-pip install 'numpy<2'
-```
-
-**Connection Errors**: The system automatically falls back to simulation mode when exchanges are unreachable.
-
-**Empty Signals**: If no signals appear, the market may be in a stable state. Signals only trigger on specific conditions.
-
-## License
-
-For Izalith Consulting internal use.
+Uso personal.

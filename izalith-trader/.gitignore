@@ -54,3 +54,7 @@ Thumbs.db
 *_secret*
 *_key*
 credentials*
+
+# Laboratorio: datos descargados y bitácoras de corrida (se regeneran)
+data/cache/
+data/lab/*.log
