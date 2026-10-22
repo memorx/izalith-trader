@@ -14,24 +14,58 @@
 - Laboratorio (`lab/`): 21 estrategias en el catálogo, evaluadas con `python -m lab.review` (reporte 2026-10-22 17:18 UTC). 9 en verde, 3 en amarillo, 5 en rojo y 4 en investigación.
   - Verde: 60/40, efectivo+10% BTC, DCA S&P, Faber, momentum dual, RSI-2, tendencia BTC, tendencia BTC+ETH con volatilidad controlada y DCA BTC.
   - Rojo: las 3 del scalper original, BTC 2x (caída de -93%) y carry en altcoins.
-- Bot en vivo arreglado y con pruebas: 75 pasan (`pytest tests/`).
-- Corrida en papel desde el 22/10 ~12:00 (allocator con trend_voltarget, faber_trend y cash_plus_btc, $1,000 cada una; además recolectores, señales y panel). Tiene 4 posiciones de papel. Tras matar el proceso se recuperaron completas, con el mismo efectivo.
-- Panel con 5 pestañas, revisado con capturas en tema claro y oscuro: resumen, mapa de riesgo de las estrategias, en vivo, mercados poco vigilados y dónde abrir cuenta.
-- Investigación de plataformas para México y Canadá en `izalith-trader/data/lab/venues.json` (se ve en el panel).
+- Análisis de cuenta chica (`python -m lab.small_account`): las mismas estrategias con 200, 1,000 y 5,000 dólares y las comisiones reales de cada plataforma. Se ve en el panel.
+- Bot en vivo arreglado y con pruebas: 79 pasan (`pytest tests/`).
+  - Órdenes límite pasivas en cripto.
+  - El papel cobra las comisiones reales del exchange y el dólar mínimo por orden de IBKR.
+- Corrida en papel con el escenario de Memo, desde el 22/10 en la tarde:
+  - `.env` local: `DRY_RUN=true`, `CRYPTO_EXCHANGE=kraken`, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una.
+  - La corrida de prueba anterior (con $10,000) quedó guardada en `izalith-trader/data/izalith_prueba_2026-10-22.db`.
+- Panel con 5 pestañas, revisado con capturas en tema claro y oscuro.
+- Investigación de plataformas para México, Canadá y "medio año en cada país" en `izalith-trader/data/lab/venues.json`.
+- En GitHub, rama `feat/laboratorio-y-refinamiento` (sin merge a `master`).
 
 **A medias**
-- **Nada commiteado todavía:** todo está en el árbol de trabajo sobre el commit inicial `3da8d1d`. Falta que Memo diga si se commitea y se sube.
 - **Corrida en papel:** depende de la sesión de Claude que la lanzó. Para que siga, Memo la tiene que correr con `run.py` desde su terminal o como tarea programada.
+- **Merge a `master`:** pendiente de que Memo lo pida.
 - **Adaptador de Interactive Brokers:** no existe. Es la cuenta de acciones recomendada para MX y CA; hoy acciones = Alpaca o Yahoo en papel.
 - **Adaptador de perpetuos (Binance USD-M / Hyperliquid):** no existe. Sin él, el carry y las estrategias con cortos no corren en vivo.
 - **Recolectores:** guardan historial por hora (tabla `kv`, llaves `collect:AAAA-MM-DDTHH`), pero falta juntar semanas antes de poder hacer backtest de los mercados en investigación.
 
 **Bloqueado**
-- **Dónde abrir cuenta:** depende de la residencia fiscal real de Memo (México o Canadá); pendiente desde el 22/10/2026. Al consultar Bybit, la conexión salió como Canadá.
-- **Cuánto capital:** sin respuesta de Memo desde el 22/10/2026.
+- **Residencia fiscal de Memo:** pasa unos seis meses en México y seis en Canadá. La residencia la decide el tratado y la confirma su contador; pendiente desde el 22/10/2026. Mientras tanto se eligieron plataformas que sirven en los dos países (Kraken Pro + IBKR).
 
 **Siguiente paso**
-- Que Memo diga dónde vive de verdad (MX o CA), con cuánto empezaría y si se commitea. Con eso se escribe el adaptador del broker que toque.
+- Dejar correr el papel un mes. Si Memo abre Kraken Pro, poner las llaves (sólo permiso de operar) con `DRY_RUN=true` primero.
+
+---
+
+## 22/10/2026 — Con $200 lo que manda es dónde y cómo se opera, no el capital
+
+**Qué cambió**
+- Memo respondió:
+  - Pasa medio año en cada país: "en los dos lados, literalmente estoy 6 anios y 6 anios en caa pais".
+  - Empezaría con unos 200 dólares.
+  - Autorizó commit y push.
+- **Motor con cuenta chica:** comisión mínima por orden y monto mínimo por orden. Nuevo `lab/small_account.py`.
+- **Comisiones verificadas en la página oficial** (no en ccxt, que trae valores viejos): Kraken Pro, nivel $0+, 0.40% maker y 0.80% taker. Bitso en pares USDT, 0.30% / 0.36%.
+- **Órdenes límite pasivas** (`postOnly`): se recolocan hasta 3 veces; lo que no se llene en 15 minutos va a mercado. El allocator las usa en cripto.
+- **El papel cobra las comisiones reales de cada exchange** y el dólar mínimo de IBKR en acciones.
+
+**Por qué**
+- Con $200 en cripto, el tamaño casi no cambia los porcentajes, pero el lugar sí. Tendencia BTC+ETH con volatilidad controlada:
+
+  | Binance | NDAX | Kraken límite | Kraken mercado |
+  |---|---|---|---|
+  | 21.2% | 20.3% | 18.9% | 15.3% |
+
+- En acciones, el dólar mínimo de IBKR deja al RSI-2 en 2.6% (contra 7.0% en el laboratorio). Faber casi no cambia (9.5%) porque opera poco.
+
+**Decisiones y descartes**
+- **Kraken Pro + IBKR** porque sirven en los dos países. Se descartaron:
+  - Binance: no opera en Canadá, y una cuenta mexicana usada desde Canadá se arriesga a un bloqueo por IP.
+  - NDAX: sólo residentes de Canadá.
+- **No se recomienda saltarse bloqueos por país con VPN o servidores** (Hyperliquid y otros lo prohíben en sus términos).
 
 ---
 
