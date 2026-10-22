@@ -153,6 +153,7 @@ class BaseAdapter(ABC):
     sim_prices: Dict[str, float] = {}     # precio inicial de la simulación por símbolo
     sim_vol_per_hour: float = 0.005       # volatilidad por vela de 1h en la simulación
     sim_fee: float = 0.001                # comisión que cobra la simulación
+    sim_min_fee: float = 0.0              # comisión mínima por orden en papel (IBKR: 1 dólar)
 
     def __init__(self, dry_run: bool = True, allow_simulation: bool = False, simulate: bool = False):
         self.dry_run = dry_run
@@ -265,6 +266,16 @@ class BaseAdapter(ABC):
         qty = self.amount_to_precision(symbol, amount / ref)
         return await self.place_market_order(symbol, side, qty, client_order_id)
 
+    async def place_passive_order(self, symbol: str, side: str, quantity: float,
+                                  client_order_id: Optional[str] = None, max_wait_s: float = 900) -> OrderResult:
+        """Orden límite que espera en el libro (comisión de maker). Por defecto: orden a mercado."""
+        return await self.place_market_order(symbol, side, quantity, client_order_id)
+
+    async def place_passive_notional(self, symbol: str, side: str, amount: float,
+                                     client_order_id: Optional[str] = None, max_wait_s: float = 900) -> OrderResult:
+        """Como place_passive_order, pero por monto. Por defecto: compra por monto a mercado."""
+        return await self.place_notional_order(symbol, side, amount, client_order_id)
+
     async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> Optional[OrderResult]:
         """Busca en el exchange una orden por nuestro id. None si no existe o no se puede saber."""
         return None
@@ -341,7 +352,7 @@ class BaseAdapter(ABC):
         )
 
     def _simulate_order(self, symbol: str, side: str, quantity: float, price: float,
-                        client_order_id: Optional[str] = None) -> OrderResult:
+                        client_order_id: Optional[str] = None, fee_rate: Optional[float] = None) -> OrderResult:
         """Orden de papel: se llena completa al precio dado y cobra la comisión de la simulación."""
         if price <= 0:
             return OrderResult(success=False, symbol=symbol, side=side, quantity=quantity,
@@ -349,7 +360,7 @@ class BaseAdapter(ABC):
 
         quote = self.quote_currency(symbol)
         notional = quantity * price
-        fee = notional * self.sim_fee
+        fee = max(notional * (self.sim_fee if fee_rate is None else fee_rate), self.sim_min_fee)
         spot_cash = not self.supports_short and quote in self._simulated_balance
         if side == "buy" and spot_cash and self._simulated_balance[quote] < notional + fee - 1e-9:
             return OrderResult(success=False, symbol=symbol, side=side, quantity=quantity, status="failed",

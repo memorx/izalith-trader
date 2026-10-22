@@ -30,6 +30,7 @@ async def execute_order(
     amount: Optional[float] = None,
     purpose: Optional[str] = None,
     close_side: Optional[str] = None,
+    passive: bool = False,
 ) -> OrderResult:
     """
     Manda una orden a mercado con registro previo.
@@ -40,6 +41,7 @@ async def execute_order(
         amount: monto en moneda de cotización (compra por monto)
         purpose: llave de idempotencia; si ya existe una orden viva con ella, no se repite
         close_side: 'long' o 'short' si la orden cierra una posición (usa close_position)
+        passive: orden límite que espera en el libro (más barata; el adaptador decide si la soporta)
     """
     if purpose:
         prior = await db.get_order_by_purpose(purpose)
@@ -53,12 +55,17 @@ async def execute_order(
     await db.insert_order_intent(module, symbol, side, cid, quantity=quantity, amount=amount, purpose=purpose)
 
     try:
-        if close_side:
+        if close_side and passive and not adapter.supports_short:
+            # En spot, cerrar un largo es vender: se puede hacer con orden pasiva
+            result = await adapter.place_passive_order(symbol, "sell" if close_side == "long" else "buy", quantity, cid)
+        elif close_side:
             result = await adapter.close_position(symbol, close_side, quantity, cid)
         elif amount is not None:
-            result = await adapter.place_notional_order(symbol, side, amount, cid)
+            result = await (adapter.place_passive_notional(symbol, side, amount, cid) if passive
+                            else adapter.place_notional_order(symbol, side, amount, cid))
         else:
-            result = await adapter.place_market_order(symbol, side, quantity, cid)
+            result = await (adapter.place_passive_order(symbol, side, quantity, cid) if passive
+                            else adapter.place_market_order(symbol, side, quantity, cid))
     except Exception as e:
         logger.error(f"[{module}] Excepción al mandar {side} {symbol}: {e}")
         # No sabemos si entró: se deja 'pending' para que la reconciliación lo resuelva

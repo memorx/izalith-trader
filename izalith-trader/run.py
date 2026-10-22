@@ -131,6 +131,7 @@ class IzalithSystem:
             "allocator_strategies": s.allocator_strategies,
             "allocator_capital_usd": s.allocator_capital_usd,
             "allocator_check_minutes": s.allocator_check_minutes,
+            "allocator_passive_orders": s.allocator_passive_orders,
             "collectors_interval_minutes": s.collectors_interval_minutes,
             "dashboard_port": s.dashboard_port,
             "dashboard_host": s.dashboard_host,

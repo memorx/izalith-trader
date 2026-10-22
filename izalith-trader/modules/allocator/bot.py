@@ -42,6 +42,8 @@ class AllocatorBot:
         self.capital = float(config.get("allocator_capital_usd", 1000.0))
         self.check_seconds = max(60, int(config.get("allocator_check_minutes", 30)) * 60)
         self.dry_run = config.get("dry_run", True)
+        # En cripto, órdenes límite que esperan: en Kraken la comisión baja de 0.80% a 0.40%
+        self.passive = bool(config.get("allocator_passive_orders", True))
         self.state: Dict[str, Dict] = {}
         self._running = False
 
@@ -161,7 +163,8 @@ class AllocatorBot:
                 if desired.get(s, 0.0) <= 0:
                     qty = pos.quantity   # salida completa: no dejar migajas
                 res = await execute_order(self.db, adapter, module, s, "sell", quantity=qty, close_side="long",
-                                          purpose=f"{module}:{tag}:{s}:sell")
+                                          purpose=f"{module}:{tag}:{s}:sell",
+                                          passive=self.passive and adapter.market == "crypto")
                 if res.success and res.filled_quantity > 0:
                     await self.portfolio.reduce_position(s, res.filled_quantity, res.price, module=module, fee=res.fee)
                 elif res.status != "duplicate":
@@ -172,7 +175,8 @@ class AllocatorBot:
                 if amount < max(min_trade, adapter.min_notional(s)):
                     continue
                 res = await execute_order(self.db, adapter, module, s, "buy", amount=amount,
-                                          purpose=f"{module}:{tag}:{s}:buy")
+                                          purpose=f"{module}:{tag}:{s}:buy",
+                                          passive=self.passive and adapter.market == "crypto")
                 if res.success and res.filled_quantity > 0:
                     await self.portfolio.add_position(symbol=s, market=adapter.market, side="buy",
                                                       quantity=res.filled_quantity, price=res.price, module=module,

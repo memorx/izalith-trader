@@ -70,6 +70,7 @@ class Settings:
     allocator_strategies: List[str] = field(default_factory=lambda: ["trend_voltarget"])
     allocator_capital_usd: float = 1000.0        # capital asignado a CADA estrategia
     allocator_check_minutes: int = 30
+    allocator_passive_orders: bool = True        # en cripto, órdenes límite que esperan (maker)
 
     # Collectors (mercados poco vigilados)
     collectors_interval_minutes: int = 15
@@ -181,6 +182,7 @@ class Settings:
             allocator_strategies=get_list("ALLOCATOR_STRATEGIES", ["trend_voltarget"]),
             allocator_capital_usd=get_float("ALLOCATOR_CAPITAL_USD", 1000.0),
             allocator_check_minutes=get_int("ALLOCATOR_CHECK_MINUTES", 30),
+            allocator_passive_orders=get_bool("ALLOCATOR_PASSIVE_ORDERS", True),
 
             # Collectors
             collectors_interval_minutes=get_int("COLLECTORS_INTERVAL_MINUTES", 15),

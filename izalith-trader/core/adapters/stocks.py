@@ -26,7 +26,8 @@ class StocksAdapter(BaseAdapter):
     supports_short = False
     sim_prices = {"VTI": 280.0, "VOO": 520.0, "SPY": 570.0, "QQQ": 480.0, "IEF": 95.0, "AGG": 98.0}
     sim_vol_per_hour = 0.003
-    sim_fee = 0.0
+    sim_fee = 0.00002
+    sim_min_fee = 1.0      # en papel se cobra como IBKR Pro: mínimo 1 dólar por orden
 
     def __init__(
         self,

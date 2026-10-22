@@ -175,3 +175,25 @@ def test_grid_refuses_steps_smaller_than_fees():
     with pytest.raises(ValueError):
         bot._validate(0.995, 1.005, 10, fee=0.001, spread_pct=0.0001)
     assert bot._validate(0.98, 1.02, 5, fee=0.001, spread_pct=0.0001) > 0
+
+
+# ── Comisiones reales en papel y órdenes pasivas ──
+
+@pytest.mark.asyncio
+async def test_kraken_paper_charges_real_fees():
+    adapter = CryptoAdapter(dry_run=True, simulate=True, exchange_id="kraken")
+    await adapter.connect()
+    market = await adapter.place_market_order("BTC/USDT", "buy", 0.01)
+    passive = await adapter.place_passive_order("BTC/USDT", "buy", 0.01)
+    assert market.fee == pytest.approx(market.price * 0.01 * 0.008, rel=1e-6)
+    assert passive.fee == pytest.approx(passive.price * 0.01 * 0.004, rel=1e-6)
+
+
+@pytest.mark.asyncio
+async def test_passive_buy_by_amount_through_execution(stack):
+    db, _, _, _ = stack
+    adapter = CryptoAdapter(dry_run=True, simulate=True, exchange_id="kraken")
+    await adapter.connect()
+    res = await execute_order(db, adapter, "alloc:x", "ETH/USDT", "buy", amount=100, purpose="p-passive", passive=True)
+    assert res.success and res.filled_quantity > 0
+    assert res.filled_quantity * res.price + res.fee <= 100 + 1e-6
