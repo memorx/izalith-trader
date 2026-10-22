@@ -40,6 +40,33 @@
 
 ---
 
+## 22/10/2026 — Países de todo el mundo y cripto en monedas locales
+
+**Qué cambió**
+- Memo pidió ver mercados de Latinoamérica, Asia, África ("etc etc etc") y también cripto.
+- **Laboratorio:** 4 estrategias con 33 ETFs de país, comprables desde IBKR en México o Canadá. Todas en amarillo por sesgo de supervivencia (no incluyen Rusia, congelada en 2022, ni Colombia, cuyo ETF cerró); pasan las otras pruebas.
+
+  | Estrategia | Rinde al año | Peor caída | Referencia |
+  |---|---|---|---|
+  | Mundo emergente en partes iguales | 7.0% | -69% | — |
+  | Tendencia en cada país emergente | 8.7% | -33% | EWZ: -77% |
+  | Tendencia en Latinoamérica | 10.1% | -53% | EWW: 9.1%, -65% |
+  | Rotación a los países más fuertes | 9.0% | -55% | SPY: 11.2% |
+
+- **Recolector de dólar cripto y BTC en 16 países.** Foto del 22/10 contra el oficial (open.er-api):
+
+  | Venezuela | Argentina | India | Egipto | Chile | Corea | Sudáfrica | México |
+  |---|---|---|---|---|---|---|---|
+  | +13.7% | +7.5% | +6.4% | +2.6% | +1.2% | +1.0% | +1.1% | +0.3% |
+
+  Nigeria no regresa datos (Binance P2P vacío).
+
+**Decisiones y descartes**
+- **Las primas por país quedan como información, no como estrategia:** aprovecharlas pide residencia, KYC y banco local, y hay controles de capital.
+- **Rotación entre países:** no le gana a sólo comprar el S&P en rendimiento. Lo que sirve es la regla de tendencia por país, que corta la peor caída a menos de la mitad.
+
+---
+
 ## 22/10/2026 — Con $200 lo que manda es dónde y cómo se opera, no el capital
 
 **Qué cambió**

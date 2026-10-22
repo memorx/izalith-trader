@@ -35,10 +35,10 @@ acciones con precios de Yahoo. Para dinero real hacen falta cuentas (ver abajo).
 
 | Parte | Para qué |
 |---|---|
-| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 21 estrategias de seguras a arriesgadas, con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
+| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 26 estrategias de seguras a arriesgadas, con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez: acciones de EE.UU., cripto, carry de funding y **33 países** (Latinoamérica, Asia, África, Medio Oriente, Europa) vía ETFs de país. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
 | `lab/small_account.py` | Las mismas estrategias con cuentas de 200, 1,000 y 5,000 dólares y las comisiones reales de Binance, NDAX, Bitso, Kraken (límite y mercado) e IBKR (con su dólar mínimo por orden). |
 | `modules/allocator` | Corre en vivo las estrategias de portafolio del laboratorio con **el mismo código** del backtest; cada una con su propio capital. En cripto usa órdenes límite que esperan en el libro (mitad de comisión en Kraken). |
-| `modules/collectors` | Fotos de mercados poco vigilados cada 15 min: funding de Binance, Bybit y Hyperliquid y sus diferencias, perpetuos de acciones y oro 24/7, prima del peso en Bitso, Polymarket. Guarda historial por hora. |
+| `modules/collectors` | Fotos de mercados poco vigilados cada 15 min: funding de Binance, Bybit y Hyperliquid y sus diferencias, perpetuos de acciones y oro 24/7, prima del peso en Bitso, **dólar cripto y BTC en 16 países** (Argentina, Venezuela, India, Corea, Turquía, Nigeria, Sudáfrica...), Polymarket. Guarda historial por hora. |
 | `modules/signals` | Alertas a Telegram/Discord. Nunca manda alertas calculadas con precios inventados. |
 | `modules/dca` | Compras periódicas por monto, en la zona horaria configurada, sin repetir un turno tras un reinicio. |
 | `modules/grid` | Rejilla de compras/ventas. Se niega a arrancar si cada vuelta pierde por comisiones. |
