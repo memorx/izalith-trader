@@ -277,7 +277,9 @@
 
     const columns = [
       { key: "semaforo", label: "Resultado", render: (e) => statusEl(e.semaforo), sortValue: (e) => ({ verde: 3, amarillo: 2, rojo: 1 }[e.semaforo] || 0) },
-      { key: "nombre", label: "Estrategia" },
+      { key: "nombre", label: "Estrategia", render: (e) => (e.inventada
+        ? h("span", {}, e.nombre.replace(" (inventada)", ""), " ", h("span", { class: "tag", text: "inventada" }))
+        : e.nombre) },
       { key: "nivel", label: "Nivel", render: (e) => e.nivel_nombre },
       { key: "cagr", label: "Rend. anual", num: true, render: (e) => signed(annual(e)), sortValue: annual },
       { key: "dd", label: "Peor caída", num: true, render: (e) => fmt.pct(e.metricas.max_drawdown, 0), sortValue: (e) => e.metricas.max_drawdown },
@@ -322,6 +324,7 @@
       aguanta_doble_costo: "Aguanta el doble de comisiones", aguanta_ejecutar_tarde: "Aguanta operar un día tarde",
       parametros_robustos: "Funciona con parámetros vecinos", sin_riesgo_de_ruina: "Nunca cayó más de 85%",
       sin_sesgo_conocido: "Sin sesgo conocido en la prueba", suficientes_operaciones: "Al menos 30 operaciones",
+      historial_suficiente: "Al menos 3 años de historial", no_es_suerte: "No fue suerte (Sharpe deflactado ≥ 95%)",
     };
     const checks = Object.entries(e.pruebas || {}).map(([k, v]) =>
       h("li", { class: v ? "ok" : "no" }, h("span", { class: "mark", text: v ? "✓" : "✕", "aria-label": v ? "sí" : "no" }), nombres[k] || k));
@@ -358,7 +361,13 @@
       : h("p", { class: "small", text: "No hizo ni una operación en todo el periodo." })) : null;
 
     fill(d,
-      h("div", { class: "detail-head" }, h("h2", { text: e.nombre }), statusEl(e.semaforo), h("span", { class: "muted", text: e.nivel_nombre })),
+      h("div", { class: "detail-head" }, h("h2", { text: e.nombre }), statusEl(e.semaforo), h("span", { class: "muted", text: e.nivel_nombre }),
+        e.inventada ? h("span", { class: "tag", text: "inventada" }) : null),
+      e.prob_no_suerte !== undefined && e.prob_no_suerte !== null
+        ? h("p", { class: "small muted", style: "margin:6px 0 0", text:
+            `Contra ${e.contra_base.base_nombre}: ${fmt.pct(e.contra_base.rend_extra_anual)} al año extra. ` +
+            `Probabilidad de que no sea suerte, contando las ${e.contra_base.ideas_probadas} ideas que se probaron: ${fmt.num(e.prob_no_suerte * 100, 0)}%.` })
+        : null,
       h("dl", { class: "facts" },
         h("dt", { text: "Cómo gana" }), h("dd", { text: e.idea }),
         h("dt", { text: "Riesgos" }), h("dd", { text: e.riesgos }),

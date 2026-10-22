@@ -240,6 +240,11 @@ pre { background: var(--surface-2); padding: 10px 12px; border-radius: var(--rad
 .research .card h4 { margin: 0 0 6px; font-size: 15px; }
 .research .card p { margin: 0 0 6px; font-size: 14px; color: var(--text-secondary); }
 
+.tag {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 550;
+  background: var(--accent-wash); color: var(--accent-ink); vertical-align: 1px;
+}
+
 .toggle-table { border: 0; background: none; color: var(--accent-ink); font: inherit; font-size: 13px; cursor: pointer; padding: 0; }
 
 /* ── Gráficas ── */

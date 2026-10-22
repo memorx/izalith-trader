@@ -11,7 +11,7 @@
 *(Esta sección se reescribe completa en cada actualización.)*
 
 **Hecho y funcionando**
-- Laboratorio (`lab/`): 26 estrategias en el catálogo, evaluadas con `python -m lab.review`. 9 en verde, 7 en amarillo (4 son de países, por sesgo de supervivencia), 5 en rojo y 5 en investigación.
+- Laboratorio (`lab/`): 33 estrategias en el catálogo (7 inventadas, ninguna pasa la prueba de "no fue suerte"), evaluadas con `python -m lab.review`.
   - Verde: 60/40, efectivo+10% BTC, DCA S&P, Faber, momentum dual, RSI-2, tendencia BTC, tendencia BTC+ETH con volatilidad controlada y DCA BTC.
   - Rojo: las 3 del scalper original, BTC 2x (caída de -93%) y carry en altcoins.
 - Análisis de cuenta chica (`python -m lab.small_account`): las mismas estrategias con 200, 1,000 y 5,000 dólares y las comisiones reales de cada plataforma. Se ve en el panel.
@@ -37,6 +37,31 @@
 
 **Siguiente paso**
 - Dejar correr el papel un mes. Si Memo abre Kraken Pro, poner las llaves (sólo permiso de operar) con `DRY_RUN=true` primero.
+
+---
+
+## 22/10/2026 — Siete estrategias inventadas, ninguna pasa la prueba de "no fue suerte"
+
+**Qué cambió**
+- Memo pidió "invéntate estrategias secretas". Se escribieron 7 en `lab/secretas.py` con su razón económica, sus parámetros y su versión base fijados ANTES de probarlas.
+- Prueba nueva: Sharpe deflactado (Bailey y López de Prado, 2014) del rendimiento contra la versión base, contando las 7 ideas. Para pasar hace falta 95%. También una regla de 3 años mínimos de historial.
+
+| Estrategia | Rinde al año | Contra su base | Probabilidad |
+|---|---|---|---|
+| BTC contra ETH | 41.3% (caída -71%) | +23.6% sobre la tendencia BTC | 54% |
+| Capitulación | 14.0% | Últimos años: -2.2% | 49% |
+| Cobre contra oro | 9.0% | +0.6% sobre el 60/40 | 13% |
+| Freno de euforia | 14.7% | -4.3% contra la tendencia BTC+ETH | 0% |
+| Países con moneda fuerte | 9.0% | Igual a la rotación normal | 6% |
+| Peso como semáforo | 2.2% | -7.9% | 0% |
+| Carry de oro | 0.2% | El funding de PAXG fue casi siempre bajo; el 32% de la foto era del perpetuo XAU | 0% |
+
+**Por qué**
+- Si se inventan varias ideas y se escoge la que mejor salió, lo que se encuentra es ruido. La prueba existe para no venderle a Memo una "estrategia secreta" que sólo fue suerte.
+
+**Decisiones y descartes**
+- La primera versión comparaba contra todas las estrategias del catálogo y contra el efectivo, y dio 0% para todas. Era un error: las del scalper (Sharpe de -7.8) y el carry (+3.4) inflaban la varianza. Se corrigió para comparar cada idea contra su versión base y con la varianza que tendría el azar.
+- Ninguna inventada se pone a correr. BTC contra ETH queda en observación: rindió más, pero con -71% de caída y sin significancia.
 
 ---
 
