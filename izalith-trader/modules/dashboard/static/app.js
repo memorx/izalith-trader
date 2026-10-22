@@ -534,6 +534,17 @@
       { key: "volume_24h", label: "Volumen 24 h", num: true, render: (r) => "$" + fmt.compact(r.volume_24h) },
     ], (f.perpetuos_no_cripto || []).slice(0, 20), { sortable: true });
 
+    const pr = ((snap.paises || {}).paises || []);
+    const pct2 = (x) => (x === undefined || x === null ? h("span", { class: "muted", text: "—" }) : signed(x / 100, 2));
+    Viz.table($("#paises"), [
+      { key: "pais", label: "País" }, { key: "region", label: "Región" }, { key: "moneda", label: "Moneda" },
+      { key: "oficial", label: "Oficial por dólar", num: true, render: (r) => (r.oficial ? fmt.num(r.oficial, r.oficial > 100 ? 0 : 3) : "—") },
+      { key: "usdt_local", label: "Dólar cripto", num: true, render: (r) => (r.usdt_local ? fmt.num(r.usdt_local, r.usdt_local > 100 ? 0 : 3) : "—") },
+      { key: "prima_usdt_pct", label: "Prima del dólar", num: true, render: (r) => pct2(r.prima_usdt_pct), sortValue: (r) => r.prima_usdt_pct },
+      { key: "prima_btc_pct", label: "Prima de BTC", num: true, render: (r) => pct2(r.prima_btc_pct), sortValue: (r) => r.prima_btc_pct },
+      { key: "fuente", label: "Fuente", render: (r) => [r.usdt_fuente, r.btc_fuente].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ") || (r.usdt_error ? "sin datos" : "—") },
+    ], pr, { sortable: true, empty: (snap.paises || {}).error || "Sin datos" });
+
     const pm = (snap.polymarket || {}).mercados || [];
     Viz.table($("#polymarket"), [
       { key: "pregunta", label: "Pregunta" },

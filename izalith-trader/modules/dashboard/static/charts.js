@@ -412,8 +412,12 @@
         el("text", { x: W - m.r, y: Y(opts.reference) - 6, "text-anchor": "end", class: "viz-axis-text" }, svg).textContent = opts.referenceLabel || "";
       }
 
-      // Etiquetas directas sólo donde caben
+      // Etiquetas directas sólo donde caben (la etiqueta de la línea de referencia ya ocupa su lugar)
       const placed = [];
+      if (opts.reference !== undefined && opts.referenceLabel) {
+        const rw = opts.referenceLabel.length * 6.2;
+        placed.push({ x: W - m.r - rw, y: Y(opts.reference) - 18, w: rw, h: 14 });
+      }
       const order = [...pts].sort((a, b) => (b.priority || 0) - (a.priority || 0));
       const labelOf = new Map();
       for (const p of order) {
