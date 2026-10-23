@@ -346,13 +346,30 @@ def test_ibkr_commission_estimate():
 
 @pytest.mark.asyncio
 async def test_unrecorded_fill_is_taken_once_by_its_module(db):
-    from core.execution import take_unrecorded
+    from core.execution import mark_recorded, take_unrecorded
     await db.insert_order_intent("alloc:x", "BTC/USDT", "buy", "c1", amount=50, purpose="alloc:x:drift-2026102310:BTC/USDT:buy")
     await db.update_order("c1", "filled_unrecorded", "x", 100.0, 0.4, 0.2)
     assert await take_unrecorded(db, "alloc:otra") == []
     got = await take_unrecorded(db, "alloc:x")
     assert len(got) == 1 and got[0].filled_quantity == pytest.approx(0.4) and got[0].side == "buy"
+    assert len(await take_unrecorded(db, "alloc:x")) == 1      # sigue pendiente hasta que se registre
+    await mark_recorded(db, "c1")
     assert await take_unrecorded(db, "alloc:x") == []
+
+
+@pytest.mark.asyncio
+async def test_failed_late_registration_stays_an_alert(db):
+    from core.execution import order_problems
+    from modules.allocator.bot import AllocatorBot
+    await db.insert_order_intent("alloc:x", "ETH/USDT", "sell", "c4", quantity=0.1, purpose="alloc:x:drift:ETH/USDT:sell")
+    await db.update_order("c4", "filled_unrecorded", "x", 100.0, 0.1, 0.1)
+
+    async def no_position(*a, **k):
+        return None
+    portfolio = SimpleNamespace(reduce_position=no_position)
+    bot = AllocatorBot({}, SimpleNamespace(_get_adapter_for_symbol=lambda s: None), portfolio, db, {})
+    await bot._adopt_unrecorded("x", "alloc:x")
+    assert [p["client_order_id"] for p in await order_problems(db)] == ["c4"]
 
 
 @pytest.mark.asyncio

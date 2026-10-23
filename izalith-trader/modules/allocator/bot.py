@@ -27,7 +27,7 @@ from typing import Dict, List, Optional
 
 from core.adapters.base import BaseAdapter
 from core.data.feed import UnifiedFeed
-from core.execution import execute_order, inflight_orders, take_unrecorded
+from core.execution import execute_order, inflight_orders, mark_recorded, take_unrecorded
 from core.portfolio.tracker import PortfolioTracker
 from core.utils.database import Database
 from core.utils.logger import get_logger
@@ -160,13 +160,21 @@ class AllocatorBot:
         """Registra en la bolsa lo que el exchange llenó sin que el bot lo anotara."""
         for r in await take_unrecorded(self.db, module):
             adapter = self._adapter_for(r.symbol)
-            if r.side == "buy":
-                await self.portfolio.add_position(symbol=r.symbol, market=adapter.market if adapter else "crypto",
-                                                  side="buy", quantity=r.filled_quantity, price=r.price,
-                                                  module=module, strategy=key, fee=r.fee,
-                                                  client_order_id=r.client_order_id)
-            else:
-                await self.portfolio.reduce_position(r.symbol, r.filled_quantity, r.price, module=module, fee=r.fee)
+            try:
+                if r.side == "buy":
+                    await self.portfolio.add_position(symbol=r.symbol, market=adapter.market if adapter else "crypto",
+                                                      side="buy", quantity=r.filled_quantity, price=r.price,
+                                                      module=module, strategy=key, fee=r.fee,
+                                                      client_order_id=r.client_order_id)
+                elif await self.portfolio.reduce_position(r.symbol, r.filled_quantity, r.price,
+                                                          module=module, fee=r.fee) is None:
+                    logger.error(f"Allocator {key}: venta tardía de {r.symbol} sin posición en la bolsa; "
+                                 f"queda como alerta para revisarla a mano")
+                    continue
+            except Exception as e:
+                logger.error(f"Allocator {key}: no se pudo registrar el llenado tardío de {r.symbol}: {e}")
+                continue
+            await mark_recorded(self.db, r.client_order_id)
             logger.warning(f"Allocator {key}: se registró tarde {r.side} {r.filled_quantity} {r.symbol} @ {r.price}")
 
     async def step(self, key: str) -> None:
