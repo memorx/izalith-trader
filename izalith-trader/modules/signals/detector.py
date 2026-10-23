@@ -18,6 +18,15 @@ from core.utils.database import Database
 logger = get_logger("signals")
 
 
+def fmt_price(p: float) -> str:
+    """Precio con los decimales que importan (BTC 2, EUR_USD 5, DOGE 6)."""
+    if p >= 100:
+        return f"{p:,.2f}"
+    if p >= 1:
+        return f"{p:.5f}"
+    return f"{p:.6f}"
+
+
 @dataclass
 class Signal:
     """Represents a detected trading signal."""
@@ -30,6 +39,8 @@ class Signal:
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     indicator_value: Optional[float] = None
     db_id: Optional[int] = None
+    candle_time: Optional[str] = None   # vela cerrada que generó la señal
+    simulated: bool = False             # True si los datos eran inventados: no se manda a nadie
 
     def to_dict(self) -> Dict:
         return {
@@ -40,7 +51,9 @@ class Signal:
             'message': self.message,
             'price': self.price,
             'timestamp': self.timestamp.isoformat(),
-            'indicator_value': self.indicator_value
+            'indicator_value': self.indicator_value,
+            'candle_time': self.candle_time,
+            'simulated': self.simulated
         }
 
 
@@ -51,7 +64,8 @@ class SignalDetector:
     RSI_OVERSOLD = 30
     RSI_OVERBOUGHT = 70
     VOLUME_SPIKE_THRESHOLD = 2.0
-    DUPLICATE_WINDOW_MINUTES = 15
+    # Con velas de 1 hora, una condición dura varias velas: no se repite la alerta en 4 horas
+    DUPLICATE_WINDOW_MINUTES = 240
 
     def __init__(
         self,
@@ -111,6 +125,12 @@ class SignalDetector:
                 breakout_signals = self._detect_breakout_signals(symbol, high, low, current_price)
                 signals.extend(breakout_signals)
 
+            simulated = bool(price_data.simulated or df.attrs.get("simulated"))
+            candle_time = df.index[-1].isoformat()
+            for sig in signals:
+                sig.candle_time = candle_time
+                sig.simulated = simulated
+
             # Filter duplicates
             signals = await self._filter_duplicates(signals)
 
@@ -130,7 +150,9 @@ class SignalDetector:
                     signal_type=signal.signal_type,
                     direction=signal.direction,
                     strength=signal.strength,
-                    price=signal.price
+                    price=signal.price,
+                    candle_time=signal.candle_time,
+                    simulated=signal.simulated
                 )
 
         except Exception as e:
@@ -241,7 +263,7 @@ class SignalDetector:
                 signal_type="bollinger_lower",
                 direction="bullish",
                 strength=min(abs(strength) + 0.5, 1.0),
-                message=f"Price touched lower Bollinger Band ({lower:.2f}) - potential bounce",
+                message=f"Price touched lower Bollinger Band ({fmt_price(lower)}) - potential bounce",
                 price=current_price,
                 indicator_value=lower
             ))
@@ -254,7 +276,7 @@ class SignalDetector:
                 signal_type="bollinger_upper",
                 direction="bearish",
                 strength=min(abs(strength) + 0.5, 1.0),
-                message=f"Price touched upper Bollinger Band ({upper:.2f}) - potential reversal",
+                message=f"Price touched upper Bollinger Band ({fmt_price(upper)}) - potential reversal",
                 price=current_price,
                 indicator_value=upper
             ))
@@ -323,7 +345,7 @@ class SignalDetector:
                 signal_type="breakout_high",
                 direction="bullish",
                 strength=max(strength, 0.6),
-                message=f"Price broke above 24h high ({high_24h:.2f}) - bullish breakout",
+                message=f"Price broke above 24h high ({fmt_price(high_24h)}) - bullish breakout",
                 price=current_price,
                 indicator_value=high_24h
             ))
@@ -336,7 +358,7 @@ class SignalDetector:
                 signal_type="breakout_low",
                 direction="bearish",
                 strength=max(strength, 0.6),
-                message=f"Price broke below 24h low ({low_24h:.2f}) - bearish breakdown",
+                message=f"Price broke below 24h low ({fmt_price(low_24h)}) - bearish breakdown",
                 price=current_price,
                 indicator_value=low_24h
             ))
@@ -350,7 +372,9 @@ class SignalDetector:
         for signal in signals:
             key = f"{signal.symbol}:{signal.signal_type}"
 
-            # Check recent signals from database
+            last = await self.db.last_signal(signal.symbol, signal.signal_type)
+            if last and signal.candle_time and last.get("candle_time") == signal.candle_time:
+                continue  # misma vela, misma señal
             recent = await self.db.get_recent_signals(
                 signal.symbol,
                 signal.signal_type,

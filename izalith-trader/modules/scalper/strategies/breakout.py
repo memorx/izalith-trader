@@ -56,10 +56,11 @@ class BreakoutStrategy(BaseStrategy):
         volume = ohlcv_df['volume']
         current_price = price_data.last
 
-        # Calculate levels
+        # Calculate levels from the candles BEFORE the two confirmation candles.
+        # If the window included them, a close could never be above its own candle's high.
         lookback = min(self.lookback_periods, len(high) - 2)
-        high_24h = high.iloc[-(lookback+1):-1].max()  # Exclude current candle
-        low_24h = low.iloc[-(lookback+1):-1].min()
+        high_24h = high.iloc[-(lookback+2):-2].max()
+        low_24h = low.iloc[-(lookback+2):-2].min()
 
         # Calculate volume
         vol_avg = volume_sma(volume, 20).iloc[-1]
@@ -127,12 +128,13 @@ class BreakoutStrategy(BaseStrategy):
     def should_exit(self, position, current_price: float, ohlcv_df=None) -> Optional[TradeSignal]:
         """Check for exit with trailing stop."""
         # Check basic SL/TP first
+        key = f"{position.symbol}:{position.entry_time}"
         basic_exit = super().should_exit(position, current_price, ohlcv_df)
         if basic_exit:
+            self._high_since_entry.pop(key, None)
             return basic_exit
 
         # Trailing stop logic
-        key = f"{position.symbol}:{position.entry_time}"
 
         if position.side == "long":
             # Track high since entry

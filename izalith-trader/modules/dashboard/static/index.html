@@ -1,410 +1,217 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Izalith Trading System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            background: #0f172a;
-            font-family: 'Inter', system-ui, sans-serif;
-        }
-        .card {
-            background: #1e293b;
-            border-radius: 0.75rem;
-            border: 1px solid #334155;
-        }
-        .positive { color: #22c55e; }
-        .negative { color: #ef4444; }
-        .price-flash-up { animation: flashGreen 0.5s ease-out; }
-        .price-flash-down { animation: flashRed 0.5s ease-out; }
-        @keyframes flashGreen {
-            0% { background-color: rgba(34, 197, 94, 0.3); }
-            100% { background-color: transparent; }
-        }
-        @keyframes flashRed {
-            0% { background-color: rgba(239, 68, 68, 0.3); }
-            100% { background-color: transparent; }
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        .status-dot.connected { background-color: #22c55e; }
-        .status-dot.disconnected { background-color: #ef4444; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Izalith Trader</title>
+  <link rel="stylesheet" href="/static/styles.css?v=13">
 </head>
-<body class="text-gray-100 min-h-screen p-4">
-    <div class="max-w-7xl mx-auto">
-        <!-- Header -->
-        <header class="mb-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold text-white">IZALITH TRADING SYSTEM</h1>
-                    <p class="text-gray-400 text-sm" id="lastUpdate">Connecting...</p>
-                </div>
-                <div class="flex items-center gap-4">
-                    <div class="text-right">
-                        <div class="text-sm text-gray-400">WebSocket</div>
-                        <div class="flex items-center gap-2">
-                            <span class="status-dot" id="wsStatus"></span>
-                            <span class="text-sm" id="wsStatusText">Disconnected</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </header>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <h1 class="brand">Izalith <small>trader</small></h1>
+    <span id="mode" class="mode-badge" hidden></span>
+    <span class="spacer"></span>
+    <span id="updated" class="updated"></span>
+    <button id="theme" class="icon-btn" type="button">Tema</button>
+  </header>
 
-        <!-- Stats Row -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="card p-4">
-                <div class="text-gray-400 text-sm">Portfolio Value</div>
-                <div class="text-2xl font-bold" id="portfolioValue">$0.00</div>
-            </div>
-            <div class="card p-4">
-                <div class="text-gray-400 text-sm">Unrealized P/L</div>
-                <div class="text-2xl font-bold" id="unrealizedPnl">$0.00</div>
-            </div>
-            <div class="card p-4">
-                <div class="text-gray-400 text-sm">Today's P/L</div>
-                <div class="text-2xl font-bold" id="dailyPnl">$0.00</div>
-            </div>
-            <div class="card p-4">
-                <div class="text-gray-400 text-sm">Trades Today</div>
-                <div class="text-2xl font-bold" id="tradeCount">0</div>
-            </div>
+  <nav class="tabs" aria-label="Secciones">
+    <a href="#resumen" data-view="resumen">Resumen</a>
+    <a href="#estrategias" data-view="estrategias">Estrategias</a>
+    <a href="#vivo" data-view="vivo">En vivo</a>
+    <a href="#mercados" data-view="mercados">Mercados poco vigilados</a>
+    <a href="#donde" data-view="donde">Dónde abrir cuenta</a>
+  </nav>
+
+  <!-- ══ Resumen ══ -->
+  <section id="view-resumen" class="view" aria-labelledby="t-resumen">
+    <h2 id="t-resumen" class="sr-only" hidden>Resumen</h2>
+    <div id="offline" class="panel" hidden>
+      <h3>El bot no está corriendo</h3>
+      <p class="muted">Este panel sólo puede mostrar el laboratorio y los mercados. Para ver el portafolio, arráncalo con
+        <code>python run.py --modules allocator,collectors,dashboard</code>.</p>
+    </div>
+    <div id="summary" hidden>
+      <div class="hero">
+        <div>
+          <div id="hero-value" class="hero-figure">—</div>
+          <div id="hero-caption" class="hero-caption">Valor del portafolio</div>
         </div>
-
-        <!-- Main Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Prices Panel -->
-            <div class="card p-4 lg:col-span-2">
-                <h2 class="text-lg font-semibold mb-4">Live Prices</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead>
-                            <tr class="text-left text-gray-400 text-sm border-b border-gray-700">
-                                <th class="pb-2">Asset</th>
-                                <th class="pb-2 text-right">Price</th>
-                                <th class="pb-2 text-right">24h Change</th>
-                                <th class="pb-2 text-right">Spread</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pricesTable">
-                            <tr><td colspan="4" class="py-4 text-center text-gray-500">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Market Status -->
-            <div class="card p-4">
-                <h2 class="text-lg font-semibold mb-4">Market Status</h2>
-                <div id="marketStatus" class="space-y-3">
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-400">Loading...</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Positions -->
-            <div class="card p-4 lg:col-span-2">
-                <h2 class="text-lg font-semibold mb-4">Open Positions</h2>
-                <div id="positions" class="space-y-2">
-                    <p class="text-gray-500">No open positions</p>
-                </div>
-            </div>
-
-            <!-- Recent Signals -->
-            <div class="card p-4">
-                <h2 class="text-lg font-semibold mb-4">Recent Signals</h2>
-                <div id="signals" class="space-y-2 max-h-64 overflow-y-auto">
-                    <p class="text-gray-500">No signals today</p>
-                </div>
-            </div>
-
-            <!-- Portfolio Chart -->
-            <div class="card p-4 lg:col-span-3">
-                <h2 class="text-lg font-semibold mb-4">Portfolio Value (24h)</h2>
-                <canvas id="portfolioChart" height="100"></canvas>
-            </div>
+      </div>
+      <div id="tiles" class="tiles"></div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Valor en el tiempo</h3>
+          <span class="spacer"></span>
+          <div class="seg" id="range" role="group" aria-label="Periodo">
+            <button type="button" data-h="24" aria-pressed="true">24 h</button>
+            <button type="button" data-h="168" aria-pressed="false">7 días</button>
+            <button type="button" data-h="720" aria-pressed="false">30 días</button>
+            <button type="button" data-h="2160" aria-pressed="false">90 días</button>
+          </div>
         </div>
+        <div id="equity-chart" class="viz"></div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Avisos</h3>
+          <ul id="alerts" class="alerts"></ul>
+        </div>
+        <div class="panel">
+          <h3>Conexiones y módulos</h3>
+          <div id="connections" class="chips" style="margin-bottom:12px"></div>
+          <div id="modules" class="chips"></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-        <!-- Footer -->
-        <footer class="mt-6 text-center text-gray-500 text-sm">
-            Izalith Trading System v1.0 | DRY_RUN Mode
-        </footer>
+  <!-- ══ Estrategias ══ -->
+  <section id="view-estrategias" class="view">
+    <h2>Estrategias, de seguras a arriesgadas</h2>
+    <p class="lede" id="lab-lede">Cada estrategia probada con datos reales, comisiones y deslizamiento, con sus parámetros de libro (sin optimizar).</p>
+
+    <div class="filters" role="group" aria-label="Filtros">
+      <span class="label">Nivel</span>
+      <div class="seg" id="f-nivel">
+        <button type="button" data-v="all" aria-pressed="true">Todas</button>
+        <button type="button" data-v="1" aria-pressed="false">Conservadora</button>
+        <button type="button" data-v="2" aria-pressed="false">Moderada</button>
+        <button type="button" data-v="3" aria-pressed="false">Agresiva</button>
+      </div>
+      <span class="label">Resultado</span>
+      <div class="seg" id="f-sem">
+        <button type="button" data-v="all" aria-pressed="true">Todas</button>
+        <button type="button" data-v="verde" aria-pressed="false">Pasan</button>
+        <button type="button" data-v="amarillo" aria-pressed="false">Casi</button>
+        <button type="button" data-v="rojo" aria-pressed="false">No sirven</button>
+      </div>
     </div>
 
-    <script>
-        // State
-        let prices = {};
-        let ws = null;
-        let chart = null;
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Mapa de riesgo</h3>
+        <span class="muted small">A la izquierda las que menos han caído, arriba las que más rinden. Haz clic en un punto para ver la estrategia.</span>
+        <span class="spacer"></span>
+        <button class="toggle-table" type="button" data-for="risk-map">Ver como tabla</button>
+      </div>
+      <div id="risk-map" class="viz"></div>
+      <div id="risk-map-table" hidden></div>
+    </div>
 
-        // Format helpers
-        const formatPrice = (price) => {
-            if (!price) return '$0.00';
-            if (price >= 1000) return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            if (price >= 1) return `$${price.toFixed(4)}`;
-            return `$${price.toFixed(6)}`;
-        };
+    <div class="panel" id="small-panel" hidden>
+      <div class="panel-head">
+        <h3>Con poco capital: lo que dejan las comisiones de cada lugar</h3>
+        <span class="spacer"></span>
+        <div class="seg" id="f-capital" role="group" aria-label="Capital">
+          <button type="button" data-v="100" aria-pressed="false">$100</button>
+          <button type="button" data-v="200" aria-pressed="true">$200</button>
+          <button type="button" data-v="1000" aria-pressed="false">$1,000</button>
+          <button type="button" data-v="5000" aria-pressed="false">$5,000</button>
+        </div>
+      </div>
+      <p class="muted small" style="margin-top:-4px">Rendimiento anual de la misma estrategia con las comisiones reales de cada plataforma, el monto mínimo por orden y, en acciones, el dólar mínimo por orden de IBKR. Entre paréntesis, en qué país se puede abrir la cuenta.</p>
+      <div id="small-table"></div>
+    </div>
 
-        const formatChange = (change) => {
-            if (!change) return '0.00%';
-            const sign = change >= 0 ? '+' : '';
-            return `${sign}${change.toFixed(2)}%`;
-        };
+    <div class="panel">
+      <div class="panel-head"><h3>Todas las estrategias</h3><span class="muted small">Ordena con clic en el encabezado.</span></div>
+      <div id="lab-table"></div>
+    </div>
 
-        const formatPnl = (pnl) => {
-            if (!pnl) return '$0.00';
-            const sign = pnl >= 0 ? '+' : '';
-            return `${sign}$${Math.abs(pnl).toFixed(2)}`;
-        };
+    <div id="detail" class="panel strategy-detail" hidden></div>
 
-        // Update prices table
-        function updatePricesTable(priceData) {
-            const table = document.getElementById('pricesTable');
-            if (!priceData || Object.keys(priceData).length === 0) {
-                table.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-500">No data</td></tr>';
-                return;
-            }
+    <div class="panel">
+      <h3>En investigación</h3>
+      <p class="muted small" style="margin-top:-4px">Mercados que casi nadie mira. Primero se junta historial con los recolectores; sin historial no hay backtest y sin backtest no hay dinero.</p>
+      <div id="research" class="research"></div>
+    </div>
+  </section>
 
-            let html = '';
-            for (const [symbol, data] of Object.entries(priceData)) {
-                const changeClass = data.change_24h_pct >= 0 ? 'positive' : 'negative';
-                const oldPrice = prices[symbol]?.last || data.last;
-                const flashClass = data.last > oldPrice ? 'price-flash-up' : data.last < oldPrice ? 'price-flash-down' : '';
+  <!-- ══ En vivo ══ -->
+  <section id="view-vivo" class="view">
+    <h2>En vivo</h2>
+    <p class="lede">Lo que el bot está haciendo ahora. Con <code>DRY_RUN=true</code> todo es en papel, con precios reales.</p>
+    <div id="vivo-offline" class="panel" hidden><p class="muted" style="margin:0">El bot no está corriendo.</p></div>
+    <div id="vivo-body">
+      <div class="panel"><div class="panel-head"><h3>Estrategias del laboratorio corriendo</h3><span class="muted small">Cada una con su propio capital</span></div><div id="sleeves"></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Papel contra laboratorio</h3><span class="muted small">Lo que hizo cada estrategia contra lo que su backtest dice que debió hacer en las mismas fechas. Con menos de un mes la diferencia es ruido.</span></div>
+        <div id="seguimiento"></div>
+      </div>
+      <div class="panel"><h3>Posiciones abiertas</h3><div id="positions"></div></div>
+      <div class="grid-2">
+        <div class="panel"><div class="panel-head"><h3>Operaciones recientes</h3><span class="spacer"></span><a id="export-csv" class="icon-btn" href="/api/export.csv" download>Descargar CSV para el contador</a></div><div id="trades"></div></div>
+        <div class="panel"><h3>Órdenes enviadas</h3><div id="orders"></div></div>
+      </div>
+      <div class="panel"><h3>Señales de hoy</h3><div id="signals"></div></div>
+    </div>
+  </section>
 
-                html += `
-                    <tr class="border-b border-gray-800 ${flashClass}">
-                        <td class="py-3">
-                            <span class="font-medium">${symbol}</span>
-                            <span class="text-xs text-gray-500 ml-2">${data.market}</span>
-                        </td>
-                        <td class="py-3 text-right font-mono">${formatPrice(data.last)}</td>
-                        <td class="py-3 text-right ${changeClass}">${formatChange(data.change_24h_pct)}</td>
-                        <td class="py-3 text-right text-gray-400">${data.spread_pct?.toFixed(3) || '0.000'}%</td>
-                    </tr>
-                `;
-            }
-            table.innerHTML = html;
-            prices = priceData;
-        }
+  <!-- ══ Mercados poco vigilados ══ -->
+  <section id="view-mercados" class="view">
+    <h2>Mercados poco vigilados</h2>
+    <p class="lede">Foto de ahora. Sirve para ver dónde hay algo raro; para saber si se repite hace falta historial, que los recolectores guardan cada hora.</p>
+    <div class="filters">
+      <button id="refresh-markets" class="icon-btn" type="button">Actualizar ahora</button>
+      <span id="markets-ts" class="muted small"></span>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Termómetros del mundo</h3><span class="muted small">Cómo están hoy y cómo estaban hace 30 días</span></div>
+      <div id="termo-tiles" class="tiles" style="margin-bottom:8px"></div>
+      <div class="grid-2">
+        <div><h3>Curva de tasas (10 años - 3 meses)</h3><p class="muted small" style="margin-top:-6px">Abajo de cero = invertida; antes de cada recesión de EE.UU. desde los 70.</p><div id="termo-curva" class="viz"></div></div>
+        <div><h3>Stablecoins en circulación</h3><p class="muted small" style="margin-top:-6px">Si crece, entra dinero nuevo a cripto.</p><div id="termo-stables" class="viz"></div></div>
+        <div><h3>Bonos de alto riesgo contra Tesoro</h3><p class="muted small" style="margin-top:-6px">Si baja rápido, el mercado de crédito se asusta.</p><div id="termo-credito" class="viz"></div></div>
+        <div><h3>Volatilidad esperada de BTC</h3><p class="muted small" style="margin-top:-6px">Lo que el mercado de opciones cree que se va a mover BTC en 30 días.</p><div id="termo-dvol" class="viz"></div></div>
+      </div>
+    </div>
 
-        // Update market status
-        function updateMarketStatus(markets) {
-            const container = document.getElementById('marketStatus');
-            if (!markets) return;
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-head"><h3>Funding de BTC, ETH y SOL por exchange</h3></div>
+        <p class="muted small" style="margin-top:-4px">Anualizado. Positivo: los largos le pagan a los cortos. La diferencia entre exchanges es lo que cobraría un corto en uno con largo en otro.</p>
+        <div id="majors"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Peso mexicano en Bitso</h3></div>
+        <div id="bitso" class="tiles" style="margin-bottom:0"></div>
+        <p class="muted small" style="margin-bottom:0">Prima de BTC/ETH en pesos contra el precio global convertido. En días normales queda en décimas de punto; en pánicos del peso se abre.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Misma moneda, funding distinto en dos exchanges</h3></div>
+      <p class="muted small" style="margin-top:-4px">Monedas con al menos 5 millones de dólares de volumen diario en ambos lados. Diferencias de cientos de puntos casi siempre son monedas en problemas: mucho riesgo de movimiento.</p>
+      <div id="spreads"></div>
+    </div>
+    <div class="grid-2">
+      <div class="panel"><h3>Funding más alto en Binance</h3><div id="top-funding"></div></div>
+      <div class="panel"><h3>Acciones, metales y más en perpetuo 24/7</h3><div id="stock-perps"></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Cripto en el mundo: dólar cripto y BTC en moneda local</h3></div>
+      <p class="muted small" style="margin-top:-4px">Precio local del USDT contra el tipo de cambio oficial, y de BTC contra el precio global convertido. Donde hay control de cambios el dólar cripto sale caro; en Corea BTC suele cotizar arriba ("prima kimchi"). Es información: aprovecharla exige vivir y tener banco en ese país.</p>
+      <div id="paises"></div>
+    </div>
+    <div class="panel" id="poly-study-panel" hidden>
+      <div class="panel-head"><h3>¿Los precios de Polymarket dicen la verdad?</h3></div>
+      <p class="muted small" style="margin-top:-4px">Mercados ya resueltos: lo que costaba el "sí" 7 días antes de su fecha de cierre contra cuántas veces de verdad ganó. Arriba de cero, el "sí" estaba barato; abajo, caro.</p>
+      <div id="poly-study-chart" class="viz"></div>
+      <p id="poly-study-text" class="small" style="margin-bottom:0"></p>
+    </div>
+    <div class="panel"><h3>Polymarket: lo más operado hoy</h3><div id="polymarket"></div></div>
+  </section>
 
-            let html = '';
-            for (const [market, status] of Object.entries(markets)) {
-                const connClass = status.connected ? 'connected' : 'disconnected';
-                const openText = status.market_open ? 'Open' : 'Closed';
-                const openClass = status.market_open ? 'positive' : 'text-gray-400';
+  <!-- ══ Dónde abrir cuenta ══ -->
+  <section id="view-donde" class="view">
+    <h2>Dónde abrir cuenta</h2>
+    <div id="venues"><p class="muted">Cargando…</p></div>
+  </section>
+</div>
 
-                html += `
-                    <div class="flex justify-between items-center py-2 border-b border-gray-800">
-                        <div class="flex items-center gap-2">
-                            <span class="status-dot ${connClass}"></span>
-                            <span class="capitalize">${market}</span>
-                        </div>
-                        <span class="${openClass}">${openText}</span>
-                    </div>
-                `;
-            }
-            container.innerHTML = html;
-        }
-
-        // Update positions
-        function updatePositions(positionsData) {
-            const container = document.getElementById('positions');
-            if (!positionsData || positionsData.length === 0) {
-                container.innerHTML = '<p class="text-gray-500">No open positions</p>';
-                return;
-            }
-
-            let html = '';
-            for (const pos of positionsData) {
-                const pnlClass = pos.unrealized_pnl >= 0 ? 'positive' : 'negative';
-                html += `
-                    <div class="bg-gray-800 rounded p-3">
-                        <div class="flex justify-between">
-                            <span class="font-medium">${pos.symbol}</span>
-                            <span class="${pnlClass}">${formatPnl(pos.unrealized_pnl)} (${pos.unrealized_pnl_pct?.toFixed(2)}%)</span>
-                        </div>
-                        <div class="text-sm text-gray-400 mt-1">
-                            ${pos.side.toUpperCase()} ${pos.quantity} @ ${formatPrice(pos.entry_price)}
-                        </div>
-                    </div>
-                `;
-            }
-            container.innerHTML = html;
-        }
-
-        // Update signals
-        function updateSignals(signalsData) {
-            const container = document.getElementById('signals');
-            if (!signalsData || signalsData.length === 0) {
-                container.innerHTML = '<p class="text-gray-500">No signals today</p>';
-                return;
-            }
-
-            let html = '';
-            for (const signal of signalsData.slice(0, 10)) {
-                const emoji = signal.direction === 'bullish' ? '🟢' : '🔴';
-                const time = new Date(signal.timestamp).toLocaleTimeString();
-
-                html += `
-                    <div class="bg-gray-800 rounded p-2 text-sm">
-                        <div class="flex items-center gap-2">
-                            <span>${emoji}</span>
-                            <span class="font-medium">${signal.symbol}</span>
-                            <span class="text-gray-500">${time}</span>
-                        </div>
-                        <div class="text-gray-400 text-xs mt-1">${signal.signal_type.replace(/_/g, ' ')}</div>
-                    </div>
-                `;
-            }
-            container.innerHTML = html;
-        }
-
-        // Update stats
-        function updateStats(performance) {
-            document.getElementById('portfolioValue').textContent = formatPrice(performance.portfolio_value);
-
-            const unrealizedEl = document.getElementById('unrealizedPnl');
-            unrealizedEl.textContent = formatPnl(performance.unrealized_pnl);
-            unrealizedEl.className = `text-2xl font-bold ${performance.unrealized_pnl >= 0 ? 'positive' : 'negative'}`;
-
-            const dailyEl = document.getElementById('dailyPnl');
-            dailyEl.textContent = formatPnl(performance.daily_pnl);
-            dailyEl.className = `text-2xl font-bold ${performance.daily_pnl >= 0 ? 'positive' : 'negative'}`;
-
-            document.getElementById('tradeCount').textContent = performance.trade_count_today || 0;
-        }
-
-        // Update portfolio chart
-        function updateChart(snapshots) {
-            const ctx = document.getElementById('portfolioChart').getContext('2d');
-
-            if (chart) chart.destroy();
-
-            if (!snapshots || snapshots.length === 0) {
-                snapshots = [{ timestamp: new Date().toISOString(), total_value_usd: 10000 }];
-            }
-
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: snapshots.map(s => new Date(s.timestamp).toLocaleTimeString()),
-                    datasets: [{
-                        label: 'Portfolio Value',
-                        data: snapshots.map(s => s.total_value_usd),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8' }
-                        },
-                        y: {
-                            grid: { color: '#334155' },
-                            ticks: {
-                                color: '#94a3b8',
-                                callback: (v) => '$' + v.toLocaleString()
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // WebSocket connection
-        function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws/prices`);
-
-            ws.onopen = () => {
-                document.getElementById('wsStatus').className = 'status-dot connected';
-                document.getElementById('wsStatusText').textContent = 'Connected';
-            };
-
-            ws.onclose = () => {
-                document.getElementById('wsStatus').className = 'status-dot disconnected';
-                document.getElementById('wsStatusText').textContent = 'Disconnected';
-                setTimeout(connectWebSocket, 5000);
-            };
-
-            ws.onerror = () => {
-                document.getElementById('wsStatus').className = 'status-dot disconnected';
-            };
-
-            ws.onmessage = (event) => {
-                const msg = JSON.parse(event.data);
-                if (msg.type === 'prices') {
-                    updatePricesTable(msg.data);
-                    document.getElementById('lastUpdate').textContent =
-                        `Last update: ${new Date().toLocaleTimeString()}`;
-                }
-            };
-        }
-
-        // Fetch data from API
-        async function fetchData() {
-            try {
-                // Status
-                const statusRes = await fetch('/api/status');
-                const status = await statusRes.json();
-                updateMarketStatus(status.markets);
-
-                // Positions
-                const posRes = await fetch('/api/positions');
-                const positions = await posRes.json();
-                updatePositions(positions);
-
-                // Signals
-                const sigRes = await fetch('/api/signals');
-                const signals = await sigRes.json();
-                updateSignals(signals);
-
-                // Performance
-                const perfRes = await fetch('/api/performance');
-                const performance = await perfRes.json();
-                updateStats(performance);
-                updateChart(performance.snapshots);
-
-                // Initial prices if WebSocket not connected
-                if (!ws || ws.readyState !== WebSocket.OPEN) {
-                    const pricesRes = await fetch('/api/prices');
-                    const pricesData = await pricesRes.json();
-                    updatePricesTable(pricesData);
-                }
-            } catch (e) {
-                console.error('Error fetching data:', e);
-            }
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchData();
-            connectWebSocket();
-            setInterval(fetchData, 30000); // Refresh every 30 seconds
-        });
-    </script>
+<script src="/static/charts.js?v=13"></script>
+<script src="/static/app.js?v=13"></script>
 </body>
 </html>

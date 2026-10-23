@@ -2,6 +2,7 @@
 Izalith Trading System - Rich Logger
 """
 import logging
+import logging.handlers
 import sys
 import os
 from datetime import datetime
@@ -121,7 +122,9 @@ def setup_logging(
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / f"izalith_{datetime.now().strftime('%Y%m%d')}.log"
 
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        # Un bot que corre semanas escribe siempre al archivo del día en que arrancó: se rota por tamaño
+        file_handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=20 * 1024 * 1024, backupCount=5,
+                                                            encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
         file_formatter = logging.Formatter(
             "%(asctime)s | %(name)s | %(levelname)s | %(message)s",
