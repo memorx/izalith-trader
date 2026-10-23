@@ -493,16 +493,25 @@
 
   $("#refresh-markets").addEventListener("click", () => loadMarkets(true));
 
+  const MARKET_BOXES = ["#termo-tiles", "#majors", "#bitso", "#spreads", "#top-funding", "#stock-perps", "#paises", "#polymarket"];
+
   async function loadMarkets(refresh) {
     const btn = $("#refresh-markets");
     btn.disabled = true; btn.textContent = "Actualizando…";
+    // Mientras llegan los datos, cada cuadro dice qué está pasando (la primera vez tarda ~1 minuto)
+    for (const sel of MARKET_BOXES) {
+      const box = $(sel);
+      if (box && !box.children.length) fill(box, h("p", { class: "muted small", text: "Juntando datos de más de 20 fuentes; la primera vez tarda alrededor de un minuto…" }));
+    }
+    const q = refresh ? "?refresh=true" : "";
+    const markets = api("/api/collectors" + q).then(renderMarkets).catch((e) => {
+      $("#markets-ts").textContent = "No se pudieron leer los mercados: " + e.message;
+    });
+    const termo = api("/api/termometros" + q).then(renderTermometros).catch((e) => {
+      fill($("#termo-tiles"), h("p", { class: "muted small", text: "Sin termómetros: " + e.message }));
+    });
     try {
-      const [snap, termo] = await Promise.all([
-        api("/api/collectors" + (refresh ? "?refresh=true" : "")),
-        api("/api/termometros" + (refresh ? "?refresh=true" : "")).catch(() => null),
-      ]);
-      renderMarkets(snap);
-      if (termo) renderTermometros(termo);
+      await Promise.all([markets, termo]);
     } finally {
       btn.disabled = false; btn.textContent = "Actualizar ahora";
     }
