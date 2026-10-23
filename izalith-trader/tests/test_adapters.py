@@ -101,159 +101,153 @@ class TestOrderResult:
 
 
 class TestCryptoAdapter:
-    """Test CryptoAdapter."""
+    """CryptoAdapter en simulación pedida (sin red)."""
 
     @pytest.fixture
     def adapter(self):
-        """Create a test adapter."""
-        return CryptoAdapter(dry_run=True)
+        return CryptoAdapter(dry_run=True, simulate=True)
 
     @pytest.mark.asyncio
-    async def test_connect(self, adapter):
-        """Test adapter connection."""
+    async def test_connect_simulated_is_not_real(self, adapter):
         result = await adapter.connect()
-        assert result is True
-        assert adapter.connected is True
-        await adapter.disconnect()
-
-    @pytest.mark.asyncio
-    async def test_simulation_mode(self, adapter):
-        """Test adapter runs in simulation mode without API keys."""
-        await adapter.connect()
-
-        # Should be in simulation mode
+        # connect() sólo regresa True si quedó conectado a la fuente REAL
+        assert result is False
         assert adapter.is_simulating is True
-
+        assert adapter.source == "simulado"
         await adapter.disconnect()
 
     @pytest.mark.asyncio
-    async def test_get_price(self, adapter):
-        """Test getting price in simulation mode."""
+    async def test_simulated_data_is_tagged(self, adapter):
         await adapter.connect()
-
         price = await adapter.get_price("BTC/USDT")
-        assert price is not None
-        assert price.symbol == "BTC/USDT"
-        assert price.last > 0
+        candles = await adapter.get_ohlcv("BTC/USDT", "1h", 50)
+        assert price.simulated is True
+        assert all(c.simulated for c in candles)
 
-        await adapter.disconnect()
+    @pytest.mark.asyncio
+    async def test_simulated_history_is_stable(self, adapter):
+        """Antes cada consulta inventaba 100 velas nuevas y el precio saltaba ±5%."""
+        await adapter.connect()
+        a = await adapter.get_ohlcv("BTC/USDT", "1h", 50)
+        b = await adapter.get_ohlcv("BTC/USDT", "1h", 50)
+        assert [c.close for c in a] == [c.close for c in b]
 
     @pytest.mark.asyncio
     async def test_get_prices(self, adapter):
-        """Test getting multiple prices."""
         await adapter.connect()
-
-        symbols = ["BTC/USDT", "ETH/USDT"]
-        prices = await adapter.get_prices(symbols)
-
+        prices = await adapter.get_prices(["BTC/USDT", "ETH/USDT"])
         assert len(prices) == 2
         assert all(p.last > 0 for p in prices)
 
-        await adapter.disconnect()
-
     @pytest.mark.asyncio
     async def test_get_ohlcv(self, adapter):
-        """Test getting OHLCV data."""
         await adapter.connect()
-
         ohlcv = await adapter.get_ohlcv("BTC/USDT", "1h", 50)
-
         assert len(ohlcv) == 50
         assert all(c.high >= c.low for c in ohlcv)
 
-        await adapter.disconnect()
-
     @pytest.mark.asyncio
     async def test_place_market_order_dry_run(self, adapter):
-        """Test placing order in dry run mode."""
         await adapter.connect()
-
         result = await adapter.place_market_order("BTC/USDT", "buy", 0.01)
-
         assert result.success is True
-        assert result.symbol == "BTC/USDT"
         assert result.side == "buy"
         assert "SIM" in result.order_id
-
-        await adapter.disconnect()
+        assert result.fee > 0
 
     @pytest.mark.asyncio
-    async def test_get_balance(self, adapter):
-        """Test getting balance."""
+    async def test_cannot_sell_what_you_dont_have_on_spot(self, adapter):
         await adapter.connect()
+        result = await adapter.place_market_order("BTC/USDT", "sell", 0.01)
+        assert result.success is False
+        assert "insuficiente" in result.error.lower()
 
-        balance = await adapter.get_balance()
+    @pytest.mark.asyncio
+    async def test_paper_balance_moves_with_orders(self, adapter):
+        await adapter.connect()
+        before = (await adapter.get_balance())["USDT"]
+        await adapter.place_market_order("BTC/USDT", "buy", 0.01)
+        after = (await adapter.get_balance())["USDT"]
+        assert after < before
 
-        assert "USDT" in balance
-        assert balance["USDT"] > 0
+    @pytest.mark.asyncio
+    async def test_no_silent_fallback_when_exchange_fails(self, monkeypatch):
+        """Si Binance no contesta y la simulación está apagada: sin datos, no precios inventados."""
+        import ccxt.async_support as ccxt_async
 
-        await adapter.disconnect()
+        class Down:
+            def __init__(self, *a, **k):
+                pass
+            async def load_markets(self):
+                raise ConnectionError("sin red")
+            async def close(self):
+                pass
+
+        monkeypatch.setattr(ccxt_async, "binance", Down)
+        adapter = CryptoAdapter(dry_run=True, allow_simulation=False)
+        assert await adapter.connect() is False
+        assert adapter.source == "sin conexión"
+        assert await adapter.get_price("BTC/USDT") is None
+        assert await adapter.get_ohlcv("BTC/USDT") == []
 
     def test_is_market_open(self, adapter):
-        """Test crypto market is always open."""
         assert adapter.is_market_open() is True
 
 
 class TestForexAdapter:
-    """Test ForexAdapter."""
-
-    @pytest.fixture
-    def adapter(self):
-        """Create a test adapter."""
-        return ForexAdapter(dry_run=True)
 
     @pytest.mark.asyncio
-    async def test_connect(self, adapter):
-        """Test adapter connection."""
-        result = await adapter.connect()
-        assert result is True
-        assert adapter.connected is True
-        await adapter.disconnect()
+    async def test_without_keys_and_without_simulation_has_no_data(self):
+        adapter = ForexAdapter(dry_run=True)
+        assert await adapter.connect() is False
+        assert adapter.source == "sin conexión"
+        assert await adapter.get_price("EUR_USD") is None
 
     @pytest.mark.asyncio
-    async def test_get_price(self, adapter):
-        """Test getting price."""
+    async def test_simulated_price(self):
+        adapter = ForexAdapter(dry_run=True, simulate=True)
         await adapter.connect()
-
         price = await adapter.get_price("EUR_USD")
-        assert price is not None
-        assert price.last > 0
-
-        await adapter.disconnect()
+        assert price is not None and price.last > 0 and price.simulated
 
     @pytest.mark.asyncio
-    async def test_symbol_normalization(self, adapter):
-        """Test symbol format conversion."""
-        assert adapter._normalize_symbol("EUR/USD") == "EUR_USD"
-        assert adapter._denormalize_symbol("EUR_USD") == "EUR/USD"
+    async def test_forex_can_short_in_paper(self):
+        adapter = ForexAdapter(dry_run=True, simulate=True)
+        await adapter.connect()
+        result = await adapter.place_market_order("EUR_USD", "sell", 1000)
+        assert result.success is True
+
+    def test_symbol_normalization(self):
+        assert ForexAdapter._normalize_symbol("EUR/USD") == "EUR_USD"
 
 
 class TestStocksAdapter:
-    """Test StocksAdapter."""
-
-    @pytest.fixture
-    def adapter(self):
-        """Create a test adapter."""
-        return StocksAdapter(dry_run=True)
 
     @pytest.mark.asyncio
-    async def test_connect(self, adapter):
-        """Test adapter connection."""
-        result = await adapter.connect()
-        assert result is True
-        assert adapter.connected is True
-        await adapter.disconnect()
+    async def test_live_without_keys_has_no_data(self):
+        # Sin llaves sólo hay precios de Yahoo, y únicamente para papel; con dinero real no hay nada
+        adapter = StocksAdapter(dry_run=False)
+        assert await adapter.connect() is False
+        assert await adapter.get_price("VTI") is None
 
     @pytest.mark.asyncio
-    async def test_get_price(self, adapter):
-        """Test getting price."""
+    async def test_simulated_price(self):
+        adapter = StocksAdapter(dry_run=True, simulate=True)
         await adapter.connect()
-
         price = await adapter.get_price("VTI")
-        assert price is not None
-        assert price.last > 0
+        assert price is not None and price.last > 0
 
-        await adapter.disconnect()
+    @pytest.mark.asyncio
+    async def test_notional_order_in_paper(self):
+        adapter = StocksAdapter(dry_run=True, simulate=True)
+        await adapter.connect()
+        result = await adapter.place_notional_order("VOO", "buy", 50)
+        assert result.success is True
+        assert result.filled_quantity * result.price == pytest.approx(50, rel=0.01)
+
+    def test_fractional_precision(self):
+        adapter = StocksAdapter(dry_run=True)
+        assert adapter.amount_to_precision("VOO", 50 / 520) == pytest.approx(0.096153846, abs=1e-9)
 
 
 if __name__ == "__main__":

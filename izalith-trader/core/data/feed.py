@@ -2,7 +2,7 @@
 Izalith Trading System - Unified Data Feed
 """
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Callable, Awaitable
 import pandas as pd
 
@@ -90,12 +90,24 @@ class UnifiedFeed:
         # Combine results
         prices = {}
         for result in results:
-            if isinstance(result, list):
-                for price in result:
-                    prices[price.symbol] = price
-                    self._price_cache[price.symbol] = price
+            if isinstance(result, Exception):
+                logger.warning(f"Error al pedir precios: {result}")
+                continue
+            for price in result:
+                prices[price.symbol] = price
+                self._price_cache[price.symbol] = price
 
         return prices
+
+    async def get_prices_cached(self, symbols: List[str], max_age_s: float = 5.0) -> Dict[str, PriceData]:
+        """Como get_prices, pero reutiliza precios de hace menos de max_age_s segundos."""
+        now = datetime.now(timezone.utc)
+        fresh = {s: p for s, p in self._price_cache.items()
+                 if s in symbols and (now - p.timestamp).total_seconds() < max_age_s}
+        missing = [s for s in symbols if s not in fresh]
+        if missing:
+            fresh.update(await self.get_prices(missing))
+        return fresh
 
     async def get_all_prices(self) -> Dict[str, PriceData]:
         """Get prices for all configured assets."""
@@ -131,7 +143,9 @@ class UnifiedFeed:
         data = [c.to_dict() for c in ohlcv]
         df = pd.DataFrame(data)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
-        df.set_index('timestamp', inplace=True)
+        df = df.set_index('timestamp')
+        # Quien use estas velas tiene que poder saber si son inventadas
+        df.attrs["simulated"] = any(c.simulated for c in ohlcv)
         return df
 
     def get_cached_price(self, symbol: str) -> Optional[PriceData]:
@@ -189,8 +203,12 @@ class UnifiedFeed:
         status = {}
         for name, adapter in self.adapters.items():
             status[name] = {
+                "name": getattr(adapter, "display_name", name),
                 "connected": adapter.connected,
+                "source": adapter.source,
+                "simulating": adapter.is_simulating,
                 "market_open": adapter.is_market_open(),
-                "dry_run": adapter.dry_run
+                "dry_run": adapter.dry_run,
+                "last_error": adapter.last_error,
             }
         return status

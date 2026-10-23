@@ -87,6 +87,7 @@ class TestSignalDetector:
         """Create a mock database."""
         db = MagicMock()
         db.get_recent_signals = AsyncMock(return_value=[])
+        db.last_signal = AsyncMock(return_value=None)
         db.insert_signal = AsyncMock(return_value=1)
         return db
 

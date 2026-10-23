@@ -1,0 +1,149 @@
+{
+ "calibracion": [
+  {
+   "tramo": "0-5¢",
+   "n": 285,
+   "precio": 0.011089473684210519,
+   "real": 0.010526315789473684,
+   "diferencia": -0.0005631578947368349
+  },
+  {
+   "tramo": "5-10¢",
+   "n": 59,
+   "precio": 0.07563559322033897,
+   "real": 0.03389830508474576,
+   "diferencia": -0.04173728813559321
+  },
+  {
+   "tramo": "10-20¢",
+   "n": 87,
+   "precio": 0.14075862068965514,
+   "real": 0.19540229885057472,
+   "diferencia": 0.054643678160919584
+  },
+  {
+   "tramo": "20-30¢",
+   "n": 108,
+   "precio": 0.25075925925925935,
+   "real": 0.35185185185185186,
+   "diferencia": 0.10109259259259251
+  },
+  {
+   "tramo": "30-40¢",
+   "n": 87,
+   "precio": 0.35015517241379307,
+   "real": 0.3218390804597701,
+   "diferencia": -0.02831609195402296
+  },
+  {
+   "tramo": "40-50¢",
+   "n": 160,
+   "precio": 0.45363437499999987,
+   "real": 0.5125,
+   "diferencia": 0.05886562500000009
+  },
+  {
+   "tramo": "50-60¢",
+   "n": 175,
+   "precio": 0.5305400000000001,
+   "real": 0.5371428571428571,
+   "diferencia": 0.0066028571428570215
+  },
+  {
+   "tramo": "60-70¢",
+   "n": 56,
+   "precio": 0.6414285714285712,
+   "real": 0.6785714285714286,
+   "diferencia": 0.037142857142857366
+  },
+  {
+   "tramo": "70-80¢",
+   "n": 38,
+   "precio": 0.7457894736842104,
+   "real": 0.7631578947368421,
+   "diferencia": 0.0173684210526317
+  },
+  {
+   "tramo": "80-90¢",
+   "n": 15,
+   "precio": 0.8555999999999998,
+   "real": 0.7333333333333333,
+   "diferencia": -0.12226666666666652
+  },
+  {
+   "tramo": "90-95¢",
+   "n": 13,
+   "precio": 0.9192307692307694,
+   "real": 0.7692307692307693,
+   "diferencia": -0.15000000000000013
+  },
+  {
+   "tramo": "95-100¢",
+   "n": 21,
+   "precio": 0.9838095238095238,
+   "real": 0.9523809523809523,
+   "diferencia": -0.03142857142857147
+  }
+ ],
+ "favoritos": {
+  "apuestas": 136,
+  "ganadas": 127,
+  "esperadas_por_precio": 128.13200000000006,
+  "z_victorias": -0.41826776566596796,
+  "rend_promedio": -0.016950116991945877,
+  "rend_desv": 0.26392388435081815,
+  "ic95_rend": [
+   -0.0613074382883967,
+   0.02740720430450495
+  ],
+  "z_rendimiento": -0.7489683401344647,
+  "peor_racha_perdidas": 2
+ },
+ "favoritos_primera_mitad": {
+  "apuestas": 77,
+  "ganadas": 70,
+  "esperadas_por_precio": 72.8965,
+  "z_victorias": -1.4782850476326777,
+  "rend_promedio": -0.047400441104272606,
+  "rend_desv": 0.30417127161925017,
+  "ic95_rend": [
+   -0.1153409666784067,
+   0.020540084469861483
+  ],
+  "z_rendimiento": -1.3674440075239056,
+  "peor_racha_perdidas": 2
+ },
+ "favoritos_segunda_mitad": {
+  "apuestas": 59,
+  "ganadas": 57,
+  "esperadas_por_precio": 55.23549999999999,
+  "z_victorias": 0.9451258992551373,
+  "rend_promedio": 0.02279013651058219,
+  "rend_desv": 0.19508746141026628,
+  "ic95_rend": [
+   -0.026990382817569304,
+   0.07257065583873368
+  ],
+  "z_rendimiento": 0.8973122049267255,
+  "peor_racha_perdidas": 1
+ },
+ "mitad_desde": "2026-02-21",
+ "generado": "2026-10-23 07:36 UTC",
+ "reglas": {
+  "volumen_minimo": 100000,
+  "desde": "2024-01-01",
+  "dias_antes_del_cierre": 7,
+  "favorito_entre": [
+   0.9,
+   0.98
+  ],
+  "tasa_comision": 0.05,
+  "spread": 0.005
+ },
+ "mercados_con_foto": 1104,
+ "excluidos": {
+  "se_resolvieron_antes": 16031,
+  "historial_corto": 1896
+ },
+ "nota": "Comprar al favorito: sin evidencia de ventaja (rendimiento por apuesta entre -6.1% y +2.7% con 95% de confianza). Foto a 7 días de la fecha programada; fuera 16031 mercados resueltos antes de tiempo y 1896 sin precio 7 días antes (mercados más cortos o sin historial)."
+}

@@ -1,30 +1,44 @@
 """
 Izalith Trading System - Scalper Executor
+
+Las posiciones del scalper viven en el PortfolioTracker (y en la base de datos), con su
+stop y su take profit: un reinicio no las deja huérfanas.
+
+Aviso: en el laboratorio (python -m lab.review) las tres estrategias del scalper salen
+en rojo con datos reales de Binance: las comisiones se comen el margen. Este módulo queda
+para pruebas en papel, no para dinero real.
 """
 import asyncio
-from typing import Dict, List, Optional
 from datetime import datetime, timezone
+from typing import Dict, List, Optional
 
 from core.adapters.base import BaseAdapter, OrderResult
 from core.data.feed import UnifiedFeed
-from core.portfolio.tracker import PortfolioTracker
+from core.execution import execute_order, inflight_orders
+from core.portfolio.tracker import PortfolioTracker, Position as TrackedPosition
 from core.utils.database import Database
 from core.utils.logger import get_logger, log_trade
-from config.assets import ASSETS, get_asset, Market
+from config.assets import get_asset
 
 from .strategies.base import BaseStrategy, TradeSignal, Position
 from .strategies.momentum import MomentumStrategy
 from .strategies.mean_reversion import MeanReversionStrategy
 from .strategies.breakout import BreakoutStrategy
-from .risk_manager import RiskManager
+from .risk_manager import RiskManager, MODULE
 
 logger = get_logger("scalper")
 
 
+class _StopsOnly(BaseStrategy):
+    """Salida por stop y take profit cuando la estrategia que abrió la posición ya no está cargada."""
+    name = "stops"
+
+    async def analyze(self, symbol, price_data, ohlcv_df):
+        return None
+
+
 class ScalperExecutor:
-    """
-    Executes scalper trades based on strategy signals.
-    """
+    """Executes scalper trades based on strategy signals."""
 
     STRATEGY_MAP = {
         "momentum": MomentumStrategy,
@@ -32,276 +46,175 @@ class ScalperExecutor:
         "breakout": BreakoutStrategy
     }
 
-    def __init__(
-        self,
-        adapters: Dict[str, BaseAdapter],
-        feed: UnifiedFeed,
-        portfolio: PortfolioTracker,
-        db: Database,
-        config: dict
-    ):
+    def __init__(self, adapters: Dict[str, BaseAdapter], feed: UnifiedFeed, portfolio: PortfolioTracker,
+                 db: Database, config: dict):
         self.adapters = adapters
         self.feed = feed
         self.portfolio = portfolio
         self.db = db
         self.config = config
-
+        self.dry_run = config.get("dry_run", True)
         self.risk_manager = RiskManager(portfolio, db, config)
 
-        # Initialize strategies
         profit_target = config.get("scalper_profit_target_pct", 0.5)
         stop_loss = config.get("scalper_stop_loss_pct", 0.3)
 
         self.strategies: Dict[str, BaseStrategy] = {}
-        enabled_strategies = config.get("scalper_strategies", ["momentum", "mean_reversion"])
-
-        for name in enabled_strategies:
+        for name in config.get("scalper_strategies", ["momentum", "mean_reversion"]):
             if name in self.STRATEGY_MAP:
                 self.strategies[name] = self.STRATEGY_MAP[name](profit_target, stop_loss)
                 logger.info(f"Loaded strategy: {name}")
-
-        # Track open positions with strategy info
-        self._positions: Dict[str, Position] = {}
+        self._fallback = _StopsOnly(profit_target, stop_loss)
         self._running = False
 
+    def _adapter_for(self, symbol: str) -> Optional[BaseAdapter]:
+        try:
+            return self.adapters.get(get_asset(symbol).market.value)
+        except ValueError:
+            return self.adapters.get("crypto")
+
+    @staticmethod
+    def _market_of(symbol: str) -> str:
+        try:
+            return get_asset(symbol).market.value
+        except ValueError:
+            return "crypto"
+
     async def run(self) -> None:
-        """Main executor loop."""
         self._running = True
         enabled_assets = self.config.get("scalper_enabled_assets", [])
-
-        logger.info(f"Scalper started with {len(self.strategies)} strategies, {len(enabled_assets)} assets")
-
+        open_now = self.portfolio.get_all_positions(module=MODULE)
+        logger.info(f"Scalper started with {len(self.strategies)} strategies, {len(enabled_assets)} assets, "
+                    f"{len(open_now)} posiciones abiertas recuperadas")
         while self._running:
             try:
-                # Check exits first
                 await self._check_exits()
-
-                # Look for new entries
                 await self._scan_for_entries(enabled_assets)
-
             except Exception as e:
                 logger.error(f"Error in scalper loop: {e}")
-
-            await asyncio.sleep(10)  # Check every 10 seconds
+            await asyncio.sleep(10)
 
     async def stop(self) -> None:
-        """Stop the executor."""
         self._running = False
         logger.info("Scalper stopped")
 
-    async def _scan_for_entries(self, symbols: List[str]) -> None:
-        """Scan symbols for entry signals."""
-        for symbol in symbols:
-            # Skip if already have position
-            if symbol in self._positions:
-                continue
+    def _usable(self, price_data, ohlcv_df) -> bool:
+        """Con dinero real nunca se opera sobre datos inventados."""
+        if self.dry_run:
+            return True
+        return not (price_data.simulated or ohlcv_df.attrs.get("simulated"))
 
+    async def _scan_for_entries(self, symbols: List[str]) -> None:
+        held = {p.symbol for p in self.portfolio.get_all_positions(module=MODULE)}
+        for symbol in symbols:
+            if symbol in held:
+                continue
             try:
-                # Get market data
                 price_data = await self.feed.get_price(symbol)
                 if not price_data:
                     continue
-
                 ohlcv_df = await self.feed.get_ohlcv_df(symbol, "1h", 100)
-                if ohlcv_df.empty:
+                if ohlcv_df.empty or not self._usable(price_data, ohlcv_df):
                     continue
-
-                # Get adapter
-                try:
-                    asset = get_asset(symbol)
-                    adapter = self.adapters.get(asset.market.value)
-                except ValueError:
-                    adapter = self.adapters.get("crypto")
-
+                adapter = self._adapter_for(symbol)
                 if not adapter:
                     continue
-
-                # Check each strategy for signals
-                for strategy_name, strategy in self.strategies.items():
+                for strategy in self.strategies.values():
                     signal = await strategy.analyze(symbol, price_data, ohlcv_df)
-
-                    if signal and signal.action in ["buy", "sell"]:
-                        await self._try_execute_entry(signal, adapter)
-                        break  # Only one signal per symbol
-
+                    if not signal or signal.action not in ("buy", "sell"):
+                        continue
+                    if signal.action == "sell" and not adapter.supports_short:
+                        logger.debug(f"{symbol}: señal de corto ignorada, {adapter.market} no permite cortos")
+                        continue
+                    candle = ohlcv_df.index[-1].isoformat()
+                    await self._try_execute_entry(signal, adapter, candle)
+                    break
             except Exception as e:
                 logger.error(f"Error scanning {symbol}: {e}")
 
-    async def _try_execute_entry(
-        self,
-        signal: TradeSignal,
-        adapter: BaseAdapter
-    ) -> Optional[OrderResult]:
-        """Try to execute an entry based on signal."""
-        # Risk check
+    async def _try_execute_entry(self, signal: TradeSignal, adapter: BaseAdapter, candle: str) -> Optional[OrderResult]:
+        market = self._market_of(signal.symbol)
         can_trade, reason = await self.risk_manager.can_open_position(
-            signal.symbol,
-            signal,
-            adapter.is_market_open()
-        )
-
+            signal.symbol, signal, adapter.is_market_open(), market)
         if not can_trade:
             logger.debug(f"Trade rejected for {signal.symbol}: {reason}")
             return None
 
-        # Calculate position size
-        quantity = self.risk_manager.calculate_position_size(
-            signal.symbol,
-            signal,
-            signal.price
-        )
-
-        if quantity <= 0:
+        quantity = adapter.amount_to_precision(
+            signal.symbol, await self.risk_manager.calculate_position_size(signal.symbol, signal, signal.price))
+        if quantity <= 0 or quantity * signal.price < adapter.min_notional(signal.symbol):
             logger.debug(f"Position size too small for {signal.symbol}")
             return None
 
-        signal.quantity = quantity
+        if await inflight_orders(self.db, MODULE, signal.symbol):
+            logger.info(f"Scalper {signal.symbol}: hay una orden en vuelo; no se entra otra vez")
+            return None
+        result = await execute_order(self.db, adapter, MODULE, signal.symbol, signal.action, quantity=quantity,
+                                     purpose=f"scalper:entry:{signal.symbol}:{candle}")
+        if not result.success or result.filled_quantity <= 0:
+            if result.status not in ("duplicate", "freno", "en_vuelo"):
+                logger.error(f"Entry failed for {signal.symbol}: {result.error}")
+            return result
 
-        # Execute order
-        result = await adapter.place_market_order(
-            signal.symbol,
-            signal.action,
-            quantity
-        )
-
-        if result.success:
-            # Track position
-            self._positions[signal.symbol] = Position(
-                symbol=signal.symbol,
-                side="long" if signal.action == "buy" else "short",
-                entry_price=result.price or signal.price,
-                quantity=quantity,
-                stop_loss=signal.stop_loss,
-                take_profit=signal.take_profit,
-                entry_time=datetime.now(timezone.utc),
-                strategy=signal.strategy
-            )
-
-            log_trade("scalper", signal.symbol, signal.action, result.price or signal.price, quantity)
-
-            # Add to portfolio
-            try:
-                asset = get_asset(signal.symbol)
-                market = asset.market.value
-            except ValueError:
-                market = "crypto"
-
-            await self.portfolio.add_position(
-                symbol=signal.symbol,
-                market=market,
-                side=signal.action,
-                quantity=quantity,
-                price=result.price or signal.price,
-                module="scalper",
-                strategy=signal.strategy
-            )
-
-            logger.info(
-                f"Entry executed: {signal.action.upper()} {quantity:.6f} {signal.symbol} "
-                f"@ ${result.price or signal.price:,.2f} ({signal.strategy}) - {signal.reason}"
-            )
-
-        else:
-            logger.error(f"Entry failed for {signal.symbol}: {result.error}")
-
+        fill = result.price or signal.price
+        # Se mantienen las distancias de la señal, medidas desde el precio real de entrada
+        sl = fill * (signal.stop_loss / signal.price) if signal.stop_loss else None
+        tp = fill * (signal.take_profit / signal.price) if signal.take_profit else None
+        await self.portfolio.add_position(
+            symbol=signal.symbol, market=market, side=signal.action, quantity=result.filled_quantity,
+            price=fill, module=MODULE, strategy=signal.strategy, fee=result.fee, stop_loss=sl, take_profit=tp,
+            simulated=result.simulated, client_order_id=result.client_order_id)
+        log_trade(MODULE, signal.symbol, signal.action, fill, result.filled_quantity)
+        logger.info(f"Entry: {signal.action.upper()} {result.filled_quantity:.6f} {signal.symbol} @ {fill:,.4f} "
+                    f"({signal.strategy}) - {signal.reason}")
         return result
 
     async def _check_exits(self) -> None:
-        """Check all open positions for exit signals."""
-        for symbol, position in list(self._positions.items()):
+        for tracked in list(self.portfolio.get_all_positions(module=MODULE)):
             try:
-                # Get current price
-                price_data = await self.feed.get_price(symbol)
+                price_data = await self.feed.get_price(tracked.symbol)
                 if not price_data:
                     continue
-
-                current_price = price_data.last
-
-                # Get OHLCV for strategy-specific exits
-                ohlcv_df = await self.feed.get_ohlcv_df(symbol, "1h", 50)
-
-                # Get the strategy that opened this position
-                strategy = self.strategies.get(position.strategy)
-                if not strategy:
+                ohlcv_df = await self.feed.get_ohlcv_df(tracked.symbol, "1h", 50)
+                if not self.dry_run and price_data.simulated:
                     continue
-
-                # Check for exit
-                exit_signal = strategy.should_exit(position, current_price, ohlcv_df)
-
+                strategy = self.strategies.get(tracked.strategy or "", self._fallback)
+                pos = Position(
+                    symbol=tracked.symbol, side=tracked.side, entry_price=tracked.entry_price,
+                    quantity=tracked.quantity,
+                    stop_loss=tracked.stop_loss or self._fallback.calculate_stop_loss(tracked.entry_price, tracked.side),
+                    take_profit=tracked.take_profit or self._fallback.calculate_take_profit(tracked.entry_price, tracked.side),
+                    entry_time=tracked.entry_time, strategy=tracked.strategy or "")
+                exit_signal = strategy.should_exit(pos, price_data.last, ohlcv_df)
                 if exit_signal:
-                    await self._execute_exit(exit_signal, position)
-
+                    await self._execute_exit(exit_signal, tracked)
             except Exception as e:
-                logger.error(f"Error checking exit for {symbol}: {e}")
+                logger.error(f"Error checking exit for {tracked.symbol}: {e}")
 
-    async def _execute_exit(
-        self,
-        signal: TradeSignal,
-        position: Position
-    ) -> Optional[OrderResult]:
-        """Execute an exit trade."""
-        # Get adapter
-        try:
-            asset = get_asset(signal.symbol)
-            adapter = self.adapters.get(asset.market.value)
-        except ValueError:
-            adapter = self.adapters.get("crypto")
-
+    async def _execute_exit(self, signal: TradeSignal, tracked: TrackedPosition) -> Optional[OrderResult]:
+        adapter = self._adapter_for(tracked.symbol)
         if not adapter:
             return None
-
-        # Execute order
-        result = await adapter.place_market_order(
-            signal.symbol,
-            signal.action,
-            position.quantity
-        )
-
-        if result.success:
-            # Calculate P/L
-            exit_price = result.price or signal.price
-            if position.side == "long":
-                pnl = (exit_price - position.entry_price) * position.quantity
-            else:
-                pnl = (position.entry_price - exit_price) * position.quantity
-
-            pnl_pct = (pnl / (position.entry_price * position.quantity)) * 100
-
-            # Close portfolio position
-            await self.portfolio.close_position(signal.symbol, exit_price)
-
-            # Remove from tracking
-            del self._positions[signal.symbol]
-
-            log_trade("scalper", signal.symbol, signal.action, exit_price, position.quantity, pnl)
-
-            logger.info(
-                f"Exit executed: {signal.action.upper()} {position.quantity:.6f} {signal.symbol} "
-                f"@ ${exit_price:,.2f} | P/L: ${pnl:+,.2f} ({pnl_pct:+.2f}%) - {signal.reason}"
-            )
-
-        else:
-            logger.error(f"Exit failed for {signal.symbol}: {result.error}")
-
+        result = await execute_order(self.db, adapter, MODULE, tracked.symbol, signal.action,
+                                     quantity=tracked.quantity, close_side=tracked.side,
+                                     purpose=f"scalper:exit:{tracked.trade_id}")
+        if not result.success or result.filled_quantity <= 0:
+            if result.status not in ("duplicate", "en_vuelo"):
+                logger.error(f"Exit failed for {tracked.symbol}: {result.error}")
+            return result
+        exit_price = result.price or signal.price
+        pnl = await self.portfolio.reduce_position(tracked.symbol, result.filled_quantity, exit_price,
+                                                   module=MODULE, fee=result.fee)
+        log_trade(MODULE, tracked.symbol, signal.action, exit_price, result.filled_quantity, pnl)
+        logger.info(f"Exit: {tracked.symbol} @ {exit_price:,.4f} | P/L: ${pnl or 0:+,.2f} - {signal.reason}")
         return result
 
     def get_status(self) -> Dict:
-        """Get current scalper status."""
+        positions = self.portfolio.get_all_positions(module=MODULE)
         return {
             "running": self._running,
             "strategies": list(self.strategies.keys()),
-            "open_positions": len(self._positions),
-            "positions": {
-                symbol: {
-                    "side": pos.side,
-                    "entry_price": pos.entry_price,
-                    "quantity": pos.quantity,
-                    "stop_loss": pos.stop_loss,
-                    "take_profit": pos.take_profit,
-                    "strategy": pos.strategy,
-                    "entry_time": pos.entry_time.isoformat()
-                }
-                for symbol, pos in self._positions.items()
-            },
-            "risk": self.risk_manager.get_status()
+            "open_positions": len(positions),
+            "positions": {p.symbol: p.to_dict() for p in positions},
+            "risk": self.risk_manager.get_status(),
         }
