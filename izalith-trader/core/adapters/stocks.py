@@ -11,7 +11,8 @@ from typing import Dict, List, Optional
 
 import pytz
 
-from .base import BaseAdapter, PriceData, OHLCV, OrderResult, Position, new_client_order_id
+from .base import BaseAdapter, PriceData, OHLCV, OrderResult, Position, new_client_order_id, OrderLookupError
+from core.market_calendar import nyse_is_open
 from core.utils.logger import get_logger
 
 logger = get_logger("stocks")
@@ -241,7 +242,12 @@ class StocksAdapter(BaseAdapter):
             try:
                 order = await asyncio.to_thread(self._api.get_order_by_client_id, cid)
                 logger.warning(f"La orden {cid} sí entró pese al error ({e})")
-            except Exception:
+            except Exception as e2:
+                if getattr(e2, "status_code", None) != 404:
+                    # No se sabe si entró: "unknown" la deja en vuelo para que se revise antes de repetirla
+                    logger.error(f"Orden {side} {symbol}: falló ({e}) y no se pudo confirmar si entró ({e2})")
+                    return OrderResult(success=True, symbol=symbol, side=side, quantity=quantity, status="unknown",
+                                       error=f"No se sabe si entró: {e}", client_order_id=cid)
                 logger.error(f"Error en orden {side} {symbol}: {e}")
                 return OrderResult(success=False, error=str(e), client_order_id=cid)
         order = await self._wait_fill(order)
@@ -253,10 +259,32 @@ class StocksAdapter(BaseAdapter):
             return None
         try:
             order = await asyncio.to_thread(self._api.get_order_by_client_id, client_order_id)
-        except Exception:
-            return None
+        except Exception as e:
+            if getattr(e, "status_code", None) == 404:
+                return None
+            raise OrderLookupError(str(e))
         side = getattr(order.side, "value", str(order.side))
         return self._result(symbol, side, float(order.qty or 0), order, client_order_id)
+
+    async def cancel_open_by_client_id(self, symbol: str, client_order_id: str) -> bool:
+        if self.dry_run or self._simulation_mode or not self._api:
+            return True
+        try:
+            order = await asyncio.to_thread(self._api.get_order_by_client_id, client_order_id)
+        except Exception as e:
+            return getattr(e, "status_code", None) == 404
+        if getattr(order.status, "value", str(order.status)) in ("filled", "canceled", "expired", "rejected"):
+            return True
+        try:
+            await asyncio.to_thread(self._api.cancel_order_by_id, order.id)
+            for _ in range(10):
+                await asyncio.sleep(1)
+                order = await asyncio.to_thread(self._api.get_order_by_id, order.id)
+                if getattr(order.status, "value", str(order.status)) in ("filled", "canceled", "expired", "rejected"):
+                    return True
+        except Exception as e:
+            logger.error(f"No se pudo cancelar la orden {client_order_id}: {e}")
+        return False
 
     async def place_market_order(self, symbol: str, side: str, quantity: float,
                                  client_order_id: Optional[str] = None) -> OrderResult:
@@ -334,7 +362,7 @@ class StocksAdapter(BaseAdapter):
 
     async def get_balance(self) -> Dict[str, float]:
         if self.dry_run or self._simulation_mode:
-            return dict(self._simulated_balance)
+            return self._paper_balance()
         if not self._api:
             raise RuntimeError("Sin cuenta de Alpaca conectada")
         account = await asyncio.to_thread(self._api.get_account)
@@ -355,10 +383,5 @@ class StocksAdapter(BaseAdapter):
         ]
 
     def is_market_open(self) -> bool:
-        """NYSE de lunes a viernes 9:30-16:00 hora de Nueva York (no considera feriados)."""
-        now = datetime.now(pytz.timezone('America/New_York'))
-        if now.weekday() >= 5:
-            return False
-        market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
-        market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
-        return market_open <= now <= market_close
+        """Sesión regular de NYSE, con feriados y cierres temprano (core/market_calendar.py)."""
+        return nyse_is_open()

@@ -149,7 +149,7 @@ class ScalperExecutor:
         result = await execute_order(self.db, adapter, MODULE, signal.symbol, signal.action, quantity=quantity,
                                      purpose=f"scalper:entry:{signal.symbol}:{candle}")
         if not result.success or result.filled_quantity <= 0:
-            if result.status not in ("duplicate", "freno"):
+            if result.status not in ("duplicate", "freno", "en_vuelo"):
                 logger.error(f"Entry failed for {signal.symbol}: {result.error}")
             return result
 
@@ -196,7 +196,7 @@ class ScalperExecutor:
                                      quantity=tracked.quantity, close_side=tracked.side,
                                      purpose=f"scalper:exit:{tracked.trade_id}")
         if not result.success or result.filled_quantity <= 0:
-            if result.status != "duplicate":
+            if result.status not in ("duplicate", "en_vuelo"):
                 logger.error(f"Exit failed for {tracked.symbol}: {result.error}")
             return result
         exit_price = result.price or signal.price

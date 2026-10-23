@@ -8,8 +8,9 @@ Usa dos clientes del mismo exchange:
 - datos: público de producción, siempre (precios reales aunque se opere en testnet)
 - operación: la cuenta con llaves (testnet o real), sólo si hay llaves
 
-Los símbolos del bot son los del laboratorio (BTC/USDT). Si el exchange no tiene ese par,
-se usa el equivalente en USD o USDC (Kraken: BTC/USD).
+Los símbolos del bot son los del laboratorio (BTC/USDT). En el exchange se opera contra la
+moneda de cotización configurada (CRYPTO_QUOTE; en Kraken, USD por defecto: BTC/USDT -> BTC/USD),
+porque el dinero que se deposita es USD o CAD, no USDT.
 
 Si Binance no contesta, no se inventan precios: se regresa None o [] salvo que la
 simulación se haya pedido o permitido (ver BaseAdapter).
@@ -18,7 +19,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from .base import BaseAdapter, PriceData, OHLCV, OrderResult, Position, new_client_order_id
+from .base import (BaseAdapter, PriceData, OHLCV, OrderResult, Position, new_client_order_id, sub_client_id,
+                   SUB_SUFFIXES, OPEN_STATES, OrderLookupError)
 from core.utils.logger import get_logger
 
 logger = get_logger("crypto")
@@ -57,6 +59,7 @@ class CryptoAdapter(BaseAdapter):
         allow_simulation: bool = False,
         simulate: bool = False,
         exchange_id: str = "binance",
+        quote: str = "",
     ):
         super().__init__(dry_run, allow_simulation, simulate)
         self.api_key = api_key
@@ -69,27 +72,31 @@ class CryptoAdapter(BaseAdapter):
         self._data = None
         self._trade = None
         self._symbol_map: Dict[str, str] = {}
+        # Moneda contra la que se opera: en Kraken se deposita USD/CAD, no USDT
+        self.quote = (quote or ("USD" if self.exchange_id == "kraken" else "")).upper()
+        self._last_px: Dict[str, float] = {}
 
     @property
     def display_name(self) -> str:
         return f"Cripto ({self.exchange_name})"
 
     def resolve_symbol(self, symbol: str) -> str:
-        """Par del bot -> par del exchange (BTC/USDT -> BTC/USD en Kraken)."""
+        """Par del bot -> par del exchange (BTC/USDT -> BTC/USD con CRYPTO_QUOTE=USD)."""
         if symbol in self._symbol_map:
             return self._symbol_map[symbol]
         markets = getattr(self._data, "markets", None) or {}
-        if not markets:
+        if not markets or "/" not in symbol:
             return symbol
-        resolved = symbol
-        if symbol not in markets and "/" in symbol:
-            base = symbol.split("/", 1)[0]
-            for alt in ("USDT", "USD", "USDC"):
-                if f"{base}/{alt}" in markets:
-                    resolved = f"{base}/{alt}"
-                    break
+        base = symbol.split("/", 1)[0]
+        candidates = ([f"{base}/{self.quote}"] if self.quote else []) + [symbol] + \
+                     [f"{base}/{alt}" for alt in ("USDT", "USD", "USDC")]
+        resolved = next((c for c in candidates if c in markets), symbol)
         self._symbol_map[symbol] = resolved
         return resolved
+
+    def quote_currency(self, symbol: str) -> str:
+        resolved = self.resolve_symbol(symbol)
+        return resolved.split("/")[1] if "/" in resolved else "USD"
 
     # ── Conexión ──
 
@@ -116,7 +123,16 @@ class CryptoAdapter(BaseAdapter):
             try:
                 self._trade = exchange_cls({**common, "apiKey": self.api_key, "secret": self.secret})
                 if self.testnet:
-                    self._trade.set_sandbox_mode(True)
+                    try:
+                        self._trade.set_sandbox_mode(True)
+                    except Exception:
+                        if not self.dry_run:
+                            # Pidió testnet y el exchange no tiene: no conectar la cuenta, para no operar dinero real sin querer
+                            raise RuntimeError(f"{self.exchange_name} no tiene testnet y se pidió testnet con DRY_RUN=false; "
+                                               f"pon CRYPTO_TESTNET=false si de verdad quieres operar en real")
+                        logger.warning(f"{self.exchange_name} no tiene testnet: la cuenta se conecta sólo para leer "
+                                       f"saldos y se opera en papel (DRY_RUN=true). Pon CRYPTO_TESTNET=false para quitar este aviso.")
+                        self.testnet = False
                 await asyncio.wait_for(self._trade.load_markets(), timeout=20.0)
             except Exception as e:
                 logger.error(f"Cuenta de {self.exchange_name} no disponible: {e}. Sólo habrá datos, no operación real.")
@@ -173,6 +189,8 @@ class CryptoAdapter(BaseAdapter):
         try:
             ticker = await self._data.fetch_ticker(self.resolve_symbol(symbol))
             price = self._price_from_ticker(symbol, ticker)
+            if price.last:
+                self._last_px[symbol] = price.last
             return price if price.last > 0 else None
         except Exception as e:
             self.last_error = str(e)
@@ -199,7 +217,11 @@ class CryptoAdapter(BaseAdapter):
             self.last_error = str(e)
             logger.warning(f"Sin precios de cripto: {e}")
             return []
-        return [self._price_from_ticker(orig, tickers[ex]) for ex, orig in mapped.items() if ex in tickers]
+        out = [self._price_from_ticker(orig, tickers[ex]) for ex, orig in mapped.items() if ex in tickers]
+        for p in out:
+            if p.last:
+                self._last_px[p.symbol] = p.last
+        return out
 
     async def get_ohlcv(self, symbol: str, timeframe: str = "1h", limit: int = 100) -> List[OHLCV]:
         """Velas cerradas. Binance incluye la vela en formación al final: se descarta."""
@@ -242,11 +264,18 @@ class CryptoAdapter(BaseAdapter):
         return quantity
 
     def min_notional(self, symbol: str) -> float:
+        """
+        Monto mínimo real por orden: el mayor entre el mínimo en dinero y el mínimo en cantidad.
+        Kraken: 0.5 USD, pero también 0.00006 BTC (~5 USD) y 0.002 ETH (~5-8 USD).
+        """
         info = self._market_info(symbol)
         if not info:
             return 10.0 if not self._simulation_mode else 0.0
-        cost_min = ((info.get("limits") or {}).get("cost") or {}).get("min")
-        return float(cost_min or 0.0)
+        limits = info.get("limits") or {}
+        cost_min = float((limits.get("cost") or {}).get("min") or 0.0)
+        amount_min = float((limits.get("amount") or {}).get("min") or 0.0)
+        px = self._last_px.get(symbol, 0.0)
+        return max(cost_min, amount_min * px * 1.01)
 
     # ── Órdenes ──
 
@@ -255,14 +284,20 @@ class CryptoAdapter(BaseAdapter):
         avg = float(order.get('average') or order.get('price') or 0.0)
         base = symbol.split("/")[0]
         fee_quote, fee_base = 0.0, 0.0
+        quote = self.quote_currency(symbol)
         for f in (order.get('fees') or ([order['fee']] if order.get('fee') else [])):
             if not f or f.get('cost') is None:
                 continue
-            if f.get('currency') == base:
+            cur = f.get('currency')
+            if cur == base:
                 fee_base += float(f['cost'])
                 fee_quote += float(f['cost']) * avg
-            else:
+            elif cur in (None, quote, "USD", "USDT", "USDC"):
                 fee_quote += float(f['cost'])
+            else:
+                # Comisión en otra moneda (BNB en Binance): se convierte con su último precio si se conoce
+                px = self._last_px.get(f"{cur}/USDT") or self._last_px.get(f"{cur}/{quote}")
+                fee_quote += float(f['cost']) * px if px else float(f['cost'])
         # Si la comisión se cobró en el activo comprado, lo que queda en la cuenta es menos
         net_filled = filled - fee_base if side == "buy" else filled
         return OrderResult(
@@ -276,22 +311,31 @@ class CryptoAdapter(BaseAdapter):
             fee=fee_quote,
         )
 
-    async def _find_order(self, symbol: str, cid: str) -> Optional[Dict]:
-        """Busca una orden por nuestro id: sirve para saber si una orden 'fallida' sí entró."""
+    async def _find_order(self, symbol: str, cid: str, strict: bool = False) -> Optional[Dict]:
+        """
+        Busca una orden por nuestro id: sirve para saber si una orden 'fallida' sí entró.
+        Con strict=True, si no se pudo preguntar lanza OrderLookupError en vez de decir "no existe".
+        """
         ex_symbol = self.resolve_symbol(symbol)
         if self.exchange_id == "binance":
             try:
                 return await self._trade.fetch_order("", ex_symbol, params={"origClientOrderId": cid})
-            except Exception:
-                return None
-        # Otros exchanges: buscar entre las órdenes recientes
+            except Exception as e:
+                if type(e).__name__ == "OrderNotFound" or not strict:
+                    return None
+                raise OrderLookupError(str(e))
+        # Kraken filtra por cl_ord_id del lado del servidor; los demás, entre las órdenes recientes
+        params = {"clientOrderId": cid} if self.exchange_id == "kraken" else {}
+        failed = None
         for fetch in ("fetch_open_orders", "fetch_closed_orders"):
             try:
-                for o in await getattr(self._trade, fetch)(ex_symbol, None, 50):
+                for o in await getattr(self._trade, fetch)(ex_symbol, None, 50, params):
                     if o.get("clientOrderId") == cid:
                         return o
-            except Exception:
-                continue
+            except Exception as e:
+                failed = e
+        if strict and failed is not None:
+            raise OrderLookupError(str(failed))
         return None
 
     async def _send(self, symbol: str, side: str, quantity: float, order_type: str,
@@ -308,8 +352,14 @@ class CryptoAdapter(BaseAdapter):
             else:
                 order = await self._trade.create_order(ex_symbol, "limit", side, qty, price, {"clientOrderId": cid})
         except Exception as e:
-            # El error pudo llegar después de que Binance aceptó la orden: preguntar antes de reportar falla
-            found = await self._find_order(symbol, cid)
+            # El error pudo llegar después de que el exchange aceptó la orden: preguntar antes de reportar falla
+            try:
+                found = await self._find_order(symbol, cid, strict=True)
+            except OrderLookupError as e2:
+                # No se sabe si entró: "unknown" la deja en vuelo para que se revise antes de repetirla
+                logger.error(f"Orden {order_type} {side} {qty} {symbol}: falló ({e}) y no se pudo confirmar si entró ({e2})")
+                return OrderResult(success=True, symbol=symbol, side=side, quantity=qty, status="unknown",
+                                   error=f"No se sabe si entró: {e}", client_order_id=cid)
             if found:
                 logger.warning(f"La orden {cid} sí entró pese al error ({e})")
                 return self._order_result(symbol, side, qty, found, cid)
@@ -324,23 +374,61 @@ class CryptoAdapter(BaseAdapter):
         logger.info(f"Orden {order_type} {side} {qty} {symbol} - id {order.get('id')} ({cid})")
         return self._order_result(symbol, side, qty, order, cid)
 
+    def _all_ids(self, client_order_id: str):
+        return [client_order_id] + [sub_client_id(client_order_id, sfx) for sfx in SUB_SUFFIXES]
+
     async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> Optional[OrderResult]:
-        """Incluye las sub-órdenes de una orden pasiva (cid-1, cid-2, ..., cid-m)."""
+        """Incluye las sub-órdenes de una orden pasiva. Si alguna sigue viva, el status lo dice."""
         if self.dry_run or self._simulation_mode or not self._trade:
             return None
         found = []
-        for cid in [client_order_id] + [f"{client_order_id}-{s}" for s in ("1", "2", "3", "m")]:
-            order = await self._find_order(symbol, cid)
+        for cid in self._all_ids(client_order_id):
+            order = await self._find_order(symbol, cid, strict=True)
             if order:
                 found.append(self._order_result(symbol, order.get("side", ""), float(order.get("amount") or 0), order, cid))
+        if not found:
+            return None
+        live = any((r.status or "").lower() in OPEN_STATES for r in found)
         filled = [r for r in found if r.filled_quantity > 0]
         if not filled:
-            return found[0] if found else None
+            r = found[0]
+            r.status = "open" if live else r.status
+            return r
         total = sum(r.filled_quantity for r in filled)
         avg = sum(r.filled_quantity * r.price for r in filled) / total
         return OrderResult(success=True, order_id=filled[0].order_id, client_order_id=client_order_id, symbol=symbol,
-                           side=filled[0].side, quantity=total, price=avg, filled_quantity=total, status="closed",
-                           fee=sum(r.fee for r in filled))
+                           side=filled[0].side, quantity=total, price=avg, filled_quantity=total,
+                           status="open" if live else "closed", fee=sum(r.fee for r in filled))
+
+    async def _cancel_confirmed(self, order: Dict, ex_symbol: str) -> Optional[Dict]:
+        """Cancela y confirma con el exchange. Regresa la orden ya muerta, o None si no se pudo confirmar."""
+        for i in range(3):
+            try:
+                await self._trade.cancel_order(order["id"], ex_symbol)
+            except Exception as e:
+                logger.warning(f"Cancelar la orden {order.get('id')} falló (intento {i + 1}): {e}")
+            try:
+                o = await self._trade.fetch_order(order["id"], ex_symbol)
+                if (o.get("status") or "").lower() not in OPEN_STATES:
+                    return o
+            except Exception:
+                pass
+            await asyncio.sleep(2 * (i + 1))
+        return None
+
+    async def cancel_open_by_client_id(self, symbol: str, client_order_id: str) -> bool:
+        if self.dry_run or self._simulation_mode or not self._trade:
+            return True
+        ok = True
+        for cid in self._all_ids(client_order_id):
+            try:
+                order = await self._find_order(symbol, cid, strict=True)
+            except OrderLookupError:
+                ok = False
+                continue
+            if order and (order.get("status") or "").lower() in OPEN_STATES:
+                ok = ok and (await self._cancel_confirmed(order, self.resolve_symbol(symbol))) is not None
+        return ok
 
     async def place_passive_order(self, symbol: str, side: str, quantity: float,
                                   client_order_id: Optional[str] = None, max_wait_s: float = 900,
@@ -349,9 +437,12 @@ class CryptoAdapter(BaseAdapter):
         Orden límite que espera en el libro (paga la comisión de maker, la mitad en Kraken).
 
         Se pone en el mejor bid (compra) o ask (venta) con postOnly; si en max_wait_s/requotes
-        no se llenó, se cancela y se vuelve a poner al precio nuevo. Lo que quede al final se
-        termina a mercado. Para estrategias que deciden una vez al día, esperar minutos no cambia
-        nada y ahorra varios puntos al año.
+        no se llenó, se cancela (y se confirma que quedó cancelada) y se vuelve a poner al
+        precio nuevo. Lo que quede al final se termina a mercado.
+
+        Seguridad: si una sub-orden no se puede confirmar como cancelada, NO se manda nada más
+        (ni otro intento ni el resto a mercado) y el resultado queda "en_vuelo" para que la
+        reconciliación lo resuelva. Así una orden viva nunca se duplica.
         """
         cid = client_order_id or new_client_order_id()
         qty = self.amount_to_precision(symbol, quantity)
@@ -373,54 +464,74 @@ class CryptoAdapter(BaseAdapter):
         ref_px = ref.last if ref else 0.0
         remaining = qty
         fills = []
+        unconfirmed = False
         wait = max(30.0, max_wait_s / max(1, requotes))
+        loop = asyncio.get_event_loop()
         for attempt in range(1, requotes + 1):
             if remaining <= 0 or remaining * ref_px < self.min_notional(symbol):
                 break
+            sub = sub_client_id(cid, str(attempt))
             try:
                 ticker = await self._data.fetch_ticker(ex_symbol)
                 px = ticker["bid"] if side == "buy" else ticker["ask"]
                 order = await self._trade.create_order(
                     ex_symbol, "limit", side, self.amount_to_precision(symbol, remaining), px,
-                    {"postOnly": True, "clientOrderId": f"{cid}-{attempt}"})
+                    {"postOnly": True, "clientOrderId": sub})
             except Exception as e:
-                logger.warning(f"Orden pasiva {attempt} de {symbol} rechazada: {e}")
-                continue
-            deadline = asyncio.get_event_loop().time() + wait
-            status = order.get("status")
-            while status not in ("closed", "canceled") and asyncio.get_event_loop().time() < deadline:
+                # El error pudo llegar después de que el exchange aceptó la orden: preguntar antes de seguir
+                try:
+                    order = await self._find_order(symbol, sub, strict=True)
+                except OrderLookupError as e2:
+                    logger.error(f"Orden pasiva {attempt} de {symbol}: falló ({e}) y no se pudo confirmar si entró "
+                                 f"({e2}); no se manda nada más hasta reconciliar")
+                    unconfirmed = True
+                    break
+                if not order:
+                    logger.warning(f"Orden pasiva {attempt} de {symbol} rechazada: {e}")
+                    continue
+                logger.warning(f"La orden pasiva {attempt} de {symbol} sí entró pese al error ({e})")
+            deadline = loop.time() + wait
+            status = (order.get("status") or "").lower()
+            while status in OPEN_STATES and loop.time() < deadline:
                 await asyncio.sleep(10)
                 try:
                     order = await self._trade.fetch_order(order["id"], ex_symbol)
-                    status = order.get("status")
+                    status = (order.get("status") or "").lower()
                 except Exception:
                     pass
-            if status not in ("closed", "canceled"):
-                try:
-                    await self._trade.cancel_order(order["id"], ex_symbol)
-                    order = await self._trade.fetch_order(order["id"], ex_symbol)
-                except Exception as e:
-                    logger.warning(f"No se pudo cancelar la orden pasiva {order.get('id')}: {e}")
+            if status in OPEN_STATES:
+                final = await self._cancel_confirmed(order, ex_symbol)
+                if final is None:
+                    logger.error(f"No se pudo confirmar la cancelación de la orden pasiva {order.get('id')} de {symbol}: "
+                                 f"no se manda nada más hasta reconciliar")
+                    unconfirmed = True
+                else:
+                    order = final
             gross = float(order.get("filled") or 0)
             if gross > 0:
-                fills.append(self._order_result(symbol, side, gross, order, f"{cid}-{attempt}"))
+                fills.append(self._order_result(symbol, side, gross, order, sub))
                 remaining = self.amount_to_precision(symbol, remaining - gross)
+            if unconfirmed:
+                break
 
-        if remaining > 0:
+        if remaining > 0 and not unconfirmed:
             p = await self.get_price(symbol)
             if p and remaining * p.last >= self.min_notional(symbol):
                 logger.info(f"Orden pasiva de {symbol} no se llenó completa; el resto ({remaining}) va a mercado")
-                rest = await self._send(symbol, side, remaining, "market", None, f"{cid}-m")
-                if rest.success and rest.filled_quantity > 0:
+                rest = await self._send(symbol, side, remaining, "market", None, sub_client_id(cid, "m"))
+                if rest.status == "unknown":
+                    unconfirmed = True
+                elif rest.success and rest.filled_quantity > 0:
                     fills.append(rest)
 
-        if not fills:
-            return OrderResult(success=False, symbol=symbol, side=side, quantity=qty, status="failed",
-                               error="La orden pasiva no se llenó", client_order_id=cid)
         total = sum(f.filled_quantity for f in fills)
+        status = "en_vuelo" if unconfirmed else ("closed" if fills else "failed")
+        if not fills:
+            return OrderResult(success=unconfirmed, symbol=symbol, side=side, quantity=qty, status=status,
+                               error=None if unconfirmed else "La orden pasiva no se llenó", client_order_id=cid)
         avg = sum(f.filled_quantity * f.price for f in fills) / total
         return OrderResult(success=True, order_id=fills[0].order_id, client_order_id=cid, symbol=symbol, side=side,
-                           quantity=qty, price=avg, filled_quantity=total, status="closed",
+                           quantity=qty, price=avg, filled_quantity=total, status=status,
                            fee=sum(f.fee for f in fills))
 
     async def place_passive_notional(self, symbol: str, side: str, amount: float,
@@ -484,7 +595,7 @@ class CryptoAdapter(BaseAdapter):
 
     async def get_balance(self) -> Dict[str, float]:
         if self.dry_run or self._simulation_mode:
-            return dict(self._simulated_balance)
+            return self._paper_balance()
         if not self._trade:
             raise RuntimeError(f"Sin cuenta de {self.exchange_name} conectada")
         balance = await self._trade.fetch_balance()

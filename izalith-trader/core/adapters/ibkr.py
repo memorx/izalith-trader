@@ -13,7 +13,8 @@ Dos formas de practicar:
 Montos chicos: con 100 dólares no alcanza para una acción de SPY. Las compras por monto usan
 fracciones de acción (IBKR las permite en acciones y ETFs de EE.UU. si la cuenta tiene el
 permiso de fracciones); si la orden fraccionada se rechaza, se intenta con acciones enteras.
-Comisión IBKR Pro Fixed: 0.005 USD por acción, mínimo 1 USD por orden.
+Comisión IBKR Pro Fixed: 0.005 USD por acción, mínimo 1 USD por orden y máximo 1% del monto.
+Si el reporte de comisión de IBKR no llega a tiempo, se anota esa estimación.
 """
 import asyncio
 import math
@@ -22,7 +23,9 @@ from typing import Dict, List, Optional
 
 import pytz
 
-from .base import BaseAdapter, PriceData, OHLCV, OrderResult, Position, new_client_order_id
+from .base import (BaseAdapter, PriceData, OHLCV, OrderResult, Position, new_client_order_id, sub_client_id,
+                   OrderLookupError)
+from core.market_calendar import nyse_is_open
 from core.utils.logger import get_logger
 
 logger = get_logger("ibkr")
@@ -33,6 +36,19 @@ DONE = {"Filled", "Cancelled", "ApiCancelled", "Inactive"}
 
 def _ok(x) -> bool:
     return x is not None and not (isinstance(x, float) and math.isnan(x)) and x > 0
+
+
+def _fees_reported(trade) -> bool:
+    """¿Ya llegó el reporte de comisión de todos los llenados?"""
+    fills = getattr(trade, "fills", []) or []
+    return bool(fills) and all(_ok(getattr(getattr(f, "commissionReport", None), "commission", None)) for f in fills)
+
+
+def estimated_commission(shares: float, price: float) -> float:
+    """IBKR Pro Fixed: 0.005 por acción, mínimo 1 USD, máximo 1% del monto."""
+    if shares <= 0:
+        return 0.0
+    return min(max(1.0, 0.005 * shares), 0.01 * shares * price)
 
 
 class IBKRAdapter(BaseAdapter):
@@ -187,8 +203,11 @@ class IBKRAdapter(BaseAdapter):
             if rep is not None and _ok(getattr(rep, "commission", None)):
                 fee += float(rep.commission)
         ok = status not in ("Cancelled", "ApiCancelled", "Inactive") or filled > 0
+        avg = float(st.avgFillPrice or 0)
+        if fee == 0 and filled > 0:
+            fee = estimated_commission(filled, avg)
         return OrderResult(success=ok, order_id=str(trade.order.orderId), client_order_id=cid, symbol=symbol,
-                           side=side, quantity=quantity, price=float(st.avgFillPrice or 0), filled_quantity=filled,
+                           side=side, quantity=quantity, price=avg, filled_quantity=filled,
                            status=status.lower() or "unknown", fee=fee,
                            error=None if ok else f"IBKR: {status} {getattr(trade, 'log', [])[-1:]}")
 
@@ -207,6 +226,10 @@ class IBKRAdapter(BaseAdapter):
         deadline = loop.time() + wait_s
         while trade.orderStatus.status not in DONE and loop.time() < deadline and not limit_price:
             await asyncio.sleep(0.5)
+        # El reporte de comisión llega unos instantes después del llenado
+        fee_deadline = loop.time() + 5
+        while float(trade.orderStatus.filled or 0) > 0 and loop.time() < fee_deadline and not _fees_reported(trade):
+            await asyncio.sleep(0.25)
         logger.info(f"IBKR {action} {quantity} {symbol}: {trade.orderStatus.status} ({cid})")
         return self._result(symbol, side, quantity, trade, cid)
 
@@ -230,7 +253,7 @@ class IBKRAdapter(BaseAdapter):
         if not result.success and result.filled_quantity == 0 and whole >= 1 and whole != qty:
             # La cuenta puede no tener permiso de fracciones: se intenta con acciones enteras
             logger.warning(f"Orden fraccionada de {symbol} rechazada; se intenta con {whole} acciones enteras")
-            result = await self._place(symbol, side, float(whole), f"{cid}-e")
+            result = await self._place(symbol, side, float(whole), sub_client_id(cid, "e"))
             result.client_order_id = cid
         return result
 
@@ -267,30 +290,61 @@ class IBKRAdapter(BaseAdapter):
         return False
 
     async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> Optional[OrderResult]:
-        if self.dry_run or self._simulation_mode or not self.connected:
+        if self.dry_run or self._simulation_mode:
             return None
-        refs = {client_order_id, f"{client_order_id}-e"}
-        for t in self.ib.trades():
-            if getattr(t.order, "orderRef", "") in refs:
-                return self._result(symbol, t.order.action.lower(), float(t.order.totalQuantity), t, client_order_id)
+        if not self.connected:
+            raise OrderLookupError("IBKR no está conectado")
+        refs = {client_order_id, sub_client_id(client_order_id, "e")}
+        mine_trades = [t for t in self.ib.trades() if getattr(t.order, "orderRef", "") in refs]
+        live = [t for t in mine_trades if t.orderStatus.status not in DONE]
+        if live:
+            r = self._result(symbol, live[0].order.action.lower(), float(live[0].order.totalQuantity), live[0],
+                             client_order_id)
+            r.status = "open"
+            return r
+        filled_trades = [t for t in mine_trades if float(t.orderStatus.filled or 0) > 0]
+        if filled_trades:
+            t = filled_trades[-1]
+            return self._result(symbol, t.order.action.lower(), float(t.order.totalQuantity), t, client_order_id)
+        if mine_trades:
+            t = mine_trades[-1]
+            return self._result(symbol, t.order.action.lower(), float(t.order.totalQuantity), t, client_order_id)
         try:
             fills = await self.ib.reqExecutionsAsync()
-        except Exception:
-            fills = []
+        except Exception as e:
+            raise OrderLookupError(f"IBKR no regresó las ejecuciones: {e}")
         mine = [f for f in fills if getattr(f.execution, "orderRef", "") in refs]
         if not mine:
             return None
         qty = sum(float(f.execution.shares) for f in mine)
         avg = sum(float(f.execution.shares) * float(f.execution.price) for f in mine) / qty
         side = "buy" if mine[0].execution.side.upper().startswith("B") else "sell"
+        fee = sum(float(f.commissionReport.commission) for f in mine
+                  if _ok(getattr(getattr(f, "commissionReport", None), "commission", None)))
         return OrderResult(success=True, order_id=str(mine[0].execution.orderId), client_order_id=client_order_id,
-                           symbol=symbol, side=side, quantity=qty, price=avg, filled_quantity=qty, status="filled")
+                           symbol=symbol, side=side, quantity=qty, price=avg, filled_quantity=qty, status="filled",
+                           fee=fee or estimated_commission(qty, avg))
+
+    async def cancel_open_by_client_id(self, symbol: str, client_order_id: str) -> bool:
+        if self.dry_run or self._simulation_mode:
+            return True
+        if not self.connected:
+            return False
+        refs = {client_order_id, sub_client_id(client_order_id, "e")}
+        live = [t for t in self.ib.trades() if getattr(t.order, "orderRef", "") in refs and t.orderStatus.status not in DONE]
+        for t in live:
+            self.ib.cancelOrder(t.order)
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + 15
+        while any(t.orderStatus.status not in DONE for t in live) and loop.time() < deadline:
+            await asyncio.sleep(0.5)
+        return all(t.orderStatus.status in DONE for t in live)
 
     # ── Cuenta ──
 
     async def get_balance(self) -> Dict[str, float]:
         if self.dry_run or self._simulation_mode:
-            return dict(self._simulated_balance)
+            return self._paper_balance()
         if not self.connected:
             raise RuntimeError("IBKR no está conectado")
         rows = await self.ib.accountSummaryAsync()
@@ -315,8 +369,5 @@ class IBKRAdapter(BaseAdapter):
         return out
 
     def is_market_open(self) -> bool:
-        """NYSE de lunes a viernes 9:30-16:00 hora de Nueva York (no considera feriados)."""
-        now = datetime.now(pytz.timezone("America/New_York"))
-        if now.weekday() >= 5:
-            return False
-        return now.replace(hour=9, minute=30, second=0, microsecond=0) <= now <= now.replace(hour=16, minute=0, second=0, microsecond=0)
+        """Sesión regular de NYSE, con feriados y cierres temprano (core/market_calendar.py)."""
+        return nyse_is_open()

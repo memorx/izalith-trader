@@ -14,7 +14,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from core.utils.logger import get_logger
 
@@ -140,9 +140,27 @@ class Position:
             self.unrealized_pnl_pct = (self.unrealized_pnl / (self.entry_price * self.quantity)) * 100
 
 
-def new_client_order_id(prefix: str = "iz") -> str:
-    """Id propio de la orden: si la respuesta se pierde, se puede preguntar por él antes de reintentar."""
-    return f"{prefix}{uuid.uuid4().hex[:20]}"
+def new_client_order_id(prefix: str = "") -> str:
+    """
+    Id propio de la orden: si la respuesta se pierde, se puede preguntar por él antes de reintentar.
+
+    Es un UUID de 36 caracteres: Kraken acepta UUID (o texto de máximo 18), Binance hasta 36,
+    Alpaca 128 e IBKR texto libre. El módulo que la mandó queda en el `purpose` de la base.
+    """
+    return str(uuid.uuid4())
+
+
+def sub_client_id(client_order_id: str, suffix: str) -> str:
+    """Id de una sub-orden (reintentos de una orden pasiva): UUID derivado, se puede recalcular al reconciliar."""
+    return str(uuid.uuid5(uuid.NAMESPACE_OID, f"{client_order_id}/{suffix}"))
+
+
+SUB_SUFFIXES = ("1", "2", "3", "m", "e")
+
+
+class OrderLookupError(Exception):
+    """No se pudo preguntar al exchange por una orden: NO significa que no exista."""
+OPEN_STATES = ("open", "new", "partially_filled", "pending", "submitted", "presubmitted", "accepted")
 
 
 class BaseAdapter(ABC):
@@ -166,12 +184,21 @@ class BaseAdapter(ABC):
         self._simulated_balance: Dict[str, float] = {"USD": 10000.0, "USDT": 10000.0}
         self._sim_history: Dict[str, List[OHLCV]] = {}
         self._sim_last: Dict[str, float] = {}
+        # En papel, el saldo y lo que se tiene salen del portafolio (que sobrevive reinicios);
+        # run.py los conecta. Sin ellos se usa el saldo de arriba, que vive sólo en memoria.
+        self.paper_cash_provider: Optional[Callable[[], float]] = None
+        self.paper_holdings_provider: Optional[Callable[[str], float]] = None
 
     # ── Estado ──
 
     @property
     def is_simulating(self) -> bool:
         return self._simulation_mode
+
+    @property
+    def is_paper(self) -> bool:
+        """Las órdenes se simulan dentro del bot (DRY_RUN o sin conexión): nada vive en un exchange."""
+        return self.dry_run or self._simulation_mode
 
     @property
     def display_name(self) -> str:
@@ -277,8 +304,15 @@ class BaseAdapter(ABC):
         return await self.place_notional_order(symbol, side, amount, client_order_id)
 
     async def get_order_by_client_id(self, symbol: str, client_order_id: str) -> Optional[OrderResult]:
-        """Busca en el exchange una orden por nuestro id. None si no existe o no se puede saber."""
+        """
+        Busca en el exchange una orden por nuestro id (con sus sub-órdenes).
+        None = el exchange no la tiene. Si no se pudo preguntar, lanza OrderLookupError.
+        """
         return None
+
+    async def cancel_open_by_client_id(self, symbol: str, client_order_id: str) -> bool:
+        """Cancela lo que siga vivo con ese id (y sus sub-órdenes). True si ya no queda nada vivo."""
+        return True
 
     def quote_currency(self, symbol: str) -> str:
         return symbol.split("/")[1] if "/" in symbol else "USD"
@@ -351,6 +385,13 @@ class BaseAdapter(ABC):
             simulated=True,
         )
 
+    def _paper_balance(self) -> Dict[str, float]:
+        """Saldo de papel: el efectivo del portafolio si está conectado, si no el de memoria."""
+        if self.paper_cash_provider:
+            cash = self.paper_cash_provider()
+            return {cur: cash for cur in self._simulated_balance} or {"USD": cash}
+        return dict(self._simulated_balance)
+
     def _simulate_order(self, symbol: str, side: str, quantity: float, price: float,
                         client_order_id: Optional[str] = None, fee_rate: Optional[float] = None) -> OrderResult:
         """Orden de papel: se llena completa al precio dado y cobra la comisión de la simulación."""
@@ -362,14 +403,19 @@ class BaseAdapter(ABC):
         notional = quantity * price
         fee = max(notional * (self.sim_fee if fee_rate is None else fee_rate), self.sim_min_fee)
         spot_cash = not self.supports_short and quote in self._simulated_balance
-        if side == "buy" and spot_cash and self._simulated_balance[quote] < notional + fee - 1e-9:
-            return OrderResult(success=False, symbol=symbol, side=side, quantity=quantity, status="failed",
-                               error=f"Saldo insuficiente de {quote}: hay {self._simulated_balance[quote]:.2f}",
-                               simulated=True)
+        if side == "buy" and not self.supports_short:
+            available = (self.paper_cash_provider() if self.paper_cash_provider
+                         else self._simulated_balance.get(quote) if spot_cash else None)
+            if available is not None and available < notional + fee - 1e-9:
+                return OrderResult(success=False, symbol=symbol, side=side, quantity=quantity, status="failed",
+                                   error=f"Saldo insuficiente de {quote}: hay {available:.2f}", simulated=True)
 
         pos = self._simulated_positions.get(symbol)
         if side == "sell" and not self.supports_short:
-            held = pos.quantity if pos and pos.side == "long" else 0.0
+            if self.paper_holdings_provider:
+                held = self.paper_holdings_provider(symbol)
+            else:
+                held = pos.quantity if pos and pos.side == "long" else 0.0
             if quantity > held * (1 + 1e-9):
                 return OrderResult(success=False, symbol=symbol, side=side, quantity=quantity, status="failed",
                                    error=f"Saldo insuficiente: se quieren vender {quantity} y hay {held}",
@@ -392,7 +438,7 @@ class BaseAdapter(ABC):
                 quantity=quantity, entry_price=price, current_price=price)
 
         # En spot el saldo de papel se mueve con cada orden, para que quedarse sin dinero también pase en papel
-        if spot_cash:
+        if spot_cash and not self.paper_cash_provider:
             if side == "buy":
                 self._simulated_balance[quote] -= notional + fee
             else:

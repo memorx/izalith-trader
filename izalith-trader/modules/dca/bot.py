@@ -178,6 +178,10 @@ class DCABot:
             order.next_execution = self._next(order.next_execution)
             await self.db.set_dca_next_execution(symbol, order.next_execution.replace(tzinfo=None).isoformat())
             return
+        if result.status == "en_vuelo":
+            # La orden de este turno sigue sin resolverse en el exchange: se vuelve a revisar en un minuto
+            logger.info(f"DCA {symbol}: orden del turno todavía en el exchange ({result.error})")
+            return
         if not result.success or result.filled_quantity <= 0:
             logger.error(f"DCA buy failed for {symbol}: {result.error or result.status}")
             return
