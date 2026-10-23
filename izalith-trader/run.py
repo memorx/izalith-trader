@@ -28,11 +28,31 @@ from core.adapters.forex import ForexAdapter
 from core.adapters.stocks import StocksAdapter
 from core.data.feed import UnifiedFeed
 from core.execution import reconcile_pending
+from core.risk_guard import RiskGuard, set_guard
 from core.portfolio.tracker import PortfolioTracker
 
 logger = get_logger("main")
 
 SNAPSHOT_SECONDS = 300
+LOCK_PORT = 47651   # candado: sólo una copia del bot puede tener este puerto
+
+
+def acquire_single_instance_lock(port: int = LOCK_PORT):
+    """
+    Dos copias del bot sobre la misma base mandarían órdenes dobles. El sistema operativo libera
+    el puerto solo si el proceso muere, así que el candado nunca se queda pegado.
+    """
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+    try:
+        sock.bind(("127.0.0.1", port))
+        sock.listen(1)
+    except OSError:
+        sock.close()
+        return None
+    return sock
 
 
 class IzalithSystem:
@@ -50,6 +70,7 @@ class IzalithSystem:
         self.instances: Dict[str, object] = {}     # módulo -> objeto (para el dashboard)
         self.unrecorded_orders: List[Dict] = []
         self.module_errors: Dict[str, str] = {}
+        self.guard: Optional[RiskGuard] = None
         self._tasks: List[asyncio.Task] = []
         self._running = False
         self._stopped = False
@@ -79,6 +100,11 @@ class IzalithSystem:
                 a = self.feed._get_adapter_for_symbol(symbol)
                 return a.market if a else "crypto"
         self.unrecorded_orders = await reconcile_pending(self.db, self.adapters, market_of)
+
+        self.guard = RiskGuard(self.db, self.settings.max_drawdown_pct)
+        await self.guard.load()
+        await self.guard.update(self.portfolio.get_total_value_usd())
+        set_guard(self.guard)
         return True
 
     async def _init_adapters(self):
@@ -185,6 +211,8 @@ class IzalithSystem:
         while self._running:
             try:
                 await self.portfolio.take_snapshot()
+                if self.guard:
+                    await self.guard.update(self.portfolio.get_total_value_usd())
             except Exception as e:
                 logger.warning(f"Snapshot falló: {e}")
             await asyncio.sleep(SNAPSHOT_SECONDS)
@@ -317,6 +345,11 @@ async def main():
         return
 
     modules = [m.strip() for m in args.modules.split(",")] if args.modules else None
+    lock = acquire_single_instance_lock()
+    if lock is None:
+        print("Ya hay otra copia de Izalith corriendo en esta computadora. Ciérrala primero "
+              "(o deténla con tools/detener.bat).")
+        return
     system = IzalithSystem(modules)
 
     loop = asyncio.get_running_loop()

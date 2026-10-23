@@ -120,6 +120,7 @@ class AllocatorBot:
         tdate = extra.get("target_date")
         sl = await self.sleeve(key)
         equity = sl["equity"]
+        await self.db.insert_sleeve_snapshot(module, equity)
 
         prices = await self.feed.get_prices(sorted(set(target) | set(sl["positions"])))
         current = {s: p.quantity * (prices[s].last if s in prices else p.current_price)
@@ -142,6 +143,7 @@ class AllocatorBot:
         tag = tdate if new_decision else f"{tdate}-drift-{datetime.now(timezone.utc):%Y%m%d%H}"
         min_trade = MIN_TRADE_FRACTION * equity
         pending = False
+        braked = False
         # Primero ventas, luego compras
         for s in sorted(symbols, key=lambda x: deltas[x]):
             delta = deltas[s]
@@ -167,7 +169,7 @@ class AllocatorBot:
                                           passive=self.passive and adapter.market == "crypto")
                 if res.success and res.filled_quantity > 0:
                     await self.portfolio.reduce_position(s, res.filled_quantity, res.price, module=module, fee=res.fee)
-                elif res.status != "duplicate":
+                elif res.status not in ("duplicate", "freno"):
                     pending = True
             else:
                 cash_now = (await self.sleeve(key))["cash"]
@@ -177,15 +179,20 @@ class AllocatorBot:
                 res = await execute_order(self.db, adapter, module, s, "buy", amount=amount,
                                           purpose=f"{module}:{tag}:{s}:buy",
                                           passive=self.passive and adapter.market == "crypto")
+                if res.status == "freno":
+                    braked = True
                 if res.success and res.filled_quantity > 0:
                     await self.portfolio.add_position(symbol=s, market=adapter.market, side="buy",
                                                       quantity=res.filled_quantity, price=res.price, module=module,
                                                       strategy=key, fee=res.fee, simulated=res.simulated,
                                                       client_order_id=res.client_order_id)
-                elif res.status != "duplicate":
+                elif res.status not in ("duplicate", "freno"):
                     pending = True
 
-        if pending:
+        if braked:
+            # No se da por cumplida: al quitar el freno se vuelve a intentar
+            self.state[key]["status"] = "frenado: el freno de emergencia no deja comprar"
+        elif pending:
             self.state[key]["status"] = "rebalanceo pendiente (mercado cerrado o sin precio)"
         else:
             await self.db.kv_set(f"{module}:applied", tdate)

@@ -167,6 +167,12 @@ class DCABot:
         result = await execute_order(self.db, adapter, MODULE, symbol, "buy", amount=order.amount_usd,
                                      purpose=f"dca:{symbol}:{slot}")
 
+        if result.status == "freno":
+            # Con el freno puesto no se compra; el turno se salta (no se recupera después)
+            logger.warning(f"DCA {symbol}: turno saltado por el freno de emergencia")
+            order.next_execution = self._next(order.next_execution)
+            await self.db.set_dca_next_execution(symbol, order.next_execution.replace(tzinfo=None).isoformat())
+            return
         if result.status == "duplicate":
             # Este turno ya se mandó antes de un reinicio: se pasa al siguiente sin volver a comprar
             order.next_execution = self._next(order.next_execution)

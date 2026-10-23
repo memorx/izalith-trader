@@ -19,6 +19,7 @@ class Settings:
     trading_timezone: str = "America/Mexico_City"   # define el "día" de los límites diarios
     allow_simulation: bool = False                   # precios inventados si la fuente real falla
     paper_cash_usd: float = 10000.0                  # capital de papel cuando DRY_RUN=true
+    max_drawdown_pct: float = 25.0                   # freno de emergencia: caída máxima desde el máximo
 
     # Crypto (ccxt; binance por defecto, kraken desde Canadá, bitso en pesos)
     crypto_exchange: str = "binance"
@@ -142,6 +143,7 @@ class Settings:
             trading_timezone=os.getenv("TRADING_TIMEZONE", "America/Mexico_City"),
             allow_simulation=get_bool("ALLOW_SIMULATION", False),
             paper_cash_usd=get_float("PAPER_CASH_USD", 10000.0),
+            max_drawdown_pct=get_float("MAX_DRAWDOWN_PCT", 25.0),
 
             # Crypto
             crypto_exchange=os.getenv("CRYPTO_EXCHANGE", "binance").strip().lower(),
