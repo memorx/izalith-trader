@@ -719,3 +719,74 @@ def get_spec(key: str) -> Spec:
 from lab.secretas import SECRETAS  # noqa: E402
 
 CATALOG.extend(SECRETAS)
+
+
+# ══════════ Portafolios que combinan estrategias ══════════
+#
+# Lo más cercano a "más constante": varias estrategias que no se mueven igual. Cuando una cae,
+# otra suele aguantar. Cada pieza pesa según su riesgo (inverso de su volatilidad del último año):
+# la que se mueve menos recibe más capital. Rebalanceo mensual entre piezas.
+
+COMBO_VERDES = ["etf_60_40", "cash_plus_btc", "faber_trend", "dual_momentum", "rsi2_spy", "trend_btc", "trend_voltarget"]
+COMBO_CHICO = ["trend_voltarget", "faber_trend"]   # 2 piezas: cabe en una cuenta de 200 dólares
+
+
+def s_combo(ctx: Ctx, componentes="verdes", metodo="inverso_vol", vol_window=252) -> Output:
+    keys = COMBO_VERDES if componentes == "verdes" else COMBO_CHICO
+    outs = {k: get_spec(k).run(ctx, **get_spec(k).params) for k in keys}
+    start = max(o.returns.index[0] for o in outs.values())
+    end = min(o.returns.index[-1] for o in outs.values())
+    cal = pd.date_range(start, end, freq="D", tz="UTC")
+    # Cada pieza se trata como un activo cuyo "precio" es su curva de capital
+    curves = pd.DataFrame({k: (1 + o.returns.reindex(cal).fillna(0.0)).cumprod() for k, o in outs.items()})
+    rets = curves.pct_change().fillna(0.0)
+    vol = rets.rolling(vol_window, min_periods=60).std().replace(0, np.nan)
+    t = pd.DataFrame(np.nan, index=cal, columns=keys)
+    for ts in cal[every(t, "MS").to_numpy()]:
+        if metodo == "iguales" or vol.loc[ts].isna().all():
+            w = pd.Series(1.0 / len(keys), index=keys)
+        else:
+            inv = (1 / vol.loc[ts]).fillna(0.0)
+            w = inv / inv.sum()
+        t.loc[ts] = w
+    # Mover capital entre piezas = vender en una y comprar en otra: se cobra 0.15% por lado
+    res_out = _weights_output(ctx, curves, t, Costs(fee=0.001 * ctx.cost_mult, slippage=0.0005 * ctx.cost_mult),
+                              keys[0], bench_name="", min_trade=0.02)
+    spy = ctx.etf_close(["SPY"])["SPY"].reindex(cal).ffill()
+    res_out.benchmark = (spy / spy.dropna().iloc[0]).dropna()
+    res_out.benchmark_name = "Comprar y aguantar SPY"
+    res_out.cash = ctx.cash_for(cal)
+
+    # Objetivo por activo para el allocator: suma de (peso de la pieza x objetivo de la pieza)
+    last_w = t.dropna(how="all").iloc[-1]
+    target: Dict[str, float] = {}
+    dates = [t.dropna(how="all").index[-1].isoformat()]
+    for k, o in outs.items():
+        for sym, w in (o.extra.get("target") or {}).items():
+            target[sym] = target.get(sym, 0.0) + float(last_w[k]) * w
+        if o.extra.get("target_date"):
+            dates.append(o.extra["target_date"])
+    res_out.extra.update({
+        "target": {s: w for s, w in target.items() if abs(w) > 1e-9},
+        "target_date": max(dates),
+        "pesos_piezas": {k: round(float(v), 4) for k, v in last_w.items()},
+        "perp_cols": [],
+        "aviso": "Las piezas se eligieron por haber salido verdes: el resultado combinado hereda ese optimismo.",
+    })
+    return res_out
+
+
+CATALOG.extend([
+    Spec("combo_verdes", "Portafolio de las 7 verdes", 2, "Acciones, bonos y cripto",
+         "IBKR (ETFs) + Kraken o Binance (cripto)",
+         "Junta las 7 estrategias verdes que el bot puede operar, cada una con más o menos capital según su riesgo, y rebalancea cada mes: no depende de que un solo mercado vaya bien.",
+         "Si todos los mercados caen a la vez (2022) caen juntas; más piezas = más órdenes y más comisiones.", 2000, "Mensual",
+         s_combo, {"componentes": "verdes"}, {"metodo": ["iguales"], "vol_window": [126, 504]},
+         datos="Las 7 estrategias del catálogo, desde 2018"),
+    Spec("combo_chico", "Portafolio chico: cripto + S&P 500", 2, "Cripto y acciones EE.UU.",
+         "Kraken (cripto) + IBKR (SPY)",
+         "Dos piezas que casi no se parecen: la tendencia BTC+ETH con volatilidad controlada y la tendencia del S&P 500, con capital según su riesgo. Pensado para empezar con poco.",
+         "Las dos pueden caer juntas en un pánico general; con 200 dólares la comisión mínima de IBKR pesa.", 200, "Mensual",
+         s_combo, {"componentes": "chico"}, {"metodo": ["iguales"], "vol_window": [126, 504]},
+         datos="Tendencia BTC+ETH y Faber, desde 2018"),
+])

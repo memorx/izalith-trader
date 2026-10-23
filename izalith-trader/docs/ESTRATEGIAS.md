@@ -1,6 +1,6 @@
 # Estrategias: revisión con datos reales
 
-Generado: 2026-10-22 21:16 UTC. Todos los números son **después de comisiones y deslizamiento**.
+Generado: 2026-10-23 03:33 UTC. Todos los números son **después de comisiones y deslizamiento**.
 Se usan los parámetros de libro, sin optimizar. 'Efectivo' es el T-bill de EE.UU. a 3 meses.
 
 Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.
@@ -40,6 +40,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 | 🔴 | Países fuertes con moneda fuerte (inventada) | Agresiva | +9.0% | +2.4% | -49% | 0.41 | +5.6% | +11.2% / -55% |
 | 🟡 | BTC contra ETH (inventada) | Agresiva | +41.3% | +2.6% | -71% | 0.84 | +37.3% | +38.3% / -83% |
 | 🔴 | Carry de oro tokenizado (inventada) | Conservadora | +0.2% | +3.8% | -1% | -6.54 | +1.9% | +21.1% / -28% |
+| 🟢 | Portafolio de las 7 verdes | Moderada | +11.0% | +2.6% | -15% | 1.02 | +12.8% | +15.1% / -34% |
+| 🟢 | Portafolio chico: cripto + S&P 500 | Moderada | +15.2% | +2.6% | -22% | 1.03 | +14.0% | +15.1% / -34% |
 
 ## Detalle
 
@@ -402,3 +404,27 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Rendimiento anual:** +0.2% · **caída máxima:** -1% · **peor año:** +0% · **meses positivos:** 50%
 - **Pruebas:** ❌ le gana al efectivo · ❌ fuera de muestra · ❌ doble costo · ❌ ejecutar tarde · ❌ parámetros vecinos · ✅ caída < 85% · ❌ 3+ años de historial · ❌ no fue suerte
 - **Ojo:** Historial corto: el perpetuo de PAXG existe desde marzo de 2025.
+
+### 🟢 Portafolio de las 7 verdes (Moderada)
+
+- **Cómo gana:** Junta las 7 estrategias verdes que el bot puede operar, cada una con más o menos capital según su riesgo, y rebalancea cada mes: no depende de que un solo mercado vaya bien.
+- **Riesgos:** Si todos los mercados caen a la vez (2022) caen juntas; más piezas = más órdenes y más comisiones.
+- **Dónde se opera:** IBKR (ETFs) + Kraken o Binance (cripto)
+- **Capital mínimo sugerido:** 2000 USD · **Frecuencia:** Mensual
+- **Datos:** Las 7 estrategias del catálogo, desde 2018
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
+- **Rendimiento anual:** +11.0% · **caída máxima:** -15% · **peor año:** -9% · **meses positivos:** 69%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
+- **Ojo:** Las piezas se eligieron por haber salido verdes: el resultado combinado hereda ese optimismo.
+
+### 🟢 Portafolio chico: cripto + S&P 500 (Moderada)
+
+- **Cómo gana:** Dos piezas que casi no se parecen: la tendencia BTC+ETH con volatilidad controlada y la tendencia del S&P 500, con capital según su riesgo. Pensado para empezar con poco.
+- **Riesgos:** Las dos pueden caer juntas en un pánico general; con 200 dólares la comisión mínima de IBKR pesa.
+- **Dónde se opera:** Kraken (cripto) + IBKR (SPY)
+- **Capital mínimo sugerido:** 200 USD · **Frecuencia:** Mensual
+- **Datos:** Tendencia BTC+ETH y Faber, desde 2018
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
+- **Rendimiento anual:** +15.2% · **caída máxima:** -22% · **peor año:** -20% · **meses positivos:** 63%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
+- **Ojo:** Las piezas se eligieron por haber salido verdes: el resultado combinado hereda ese optimismo.
