@@ -197,3 +197,53 @@ async def test_passive_buy_by_amount_through_execution(stack):
     res = await execute_order(db, adapter, "alloc:x", "ETH/USDT", "buy", amount=100, purpose="p-passive", passive=True)
     assert res.success and res.filled_quantity > 0
     assert res.filled_quantity * res.price + res.fee <= 100 + 1e-6
+
+
+# ── Freno de emergencia ──
+
+@pytest.mark.asyncio
+async def test_brake_activates_and_blocks_only_new_exposure(stack):
+    from core.risk_guard import RiskGuard, set_guard
+    db, adapter, _, tracker = stack
+    guard = RiskGuard(db, max_drawdown_pct=25)
+    await guard.load()
+    await guard.update(200.0)
+    assert not guard.active
+    assert await guard.update(140.0) is True          # -30% desde el máximo
+    set_guard(guard)
+    try:
+        buy = await execute_order(db, adapter, "alloc:x", "BTC/USDT", "buy", amount=20, purpose="b1")
+        assert buy.status == "freno" and not buy.success
+        await tracker.add_position("ETH/USDT", "crypto", "buy", 0.01, 100.0, module="m")
+        adapter._simulated_positions.clear()
+        await adapter.place_market_order("ETH/USDT", "buy", 0.01)
+        sell = await execute_order(db, adapter, "m", "ETH/USDT", "sell", quantity=0.01, close_side="long", purpose="s1")
+        assert sell.status != "freno"                  # salir siempre se puede
+    finally:
+        set_guard(None)
+
+
+@pytest.mark.asyncio
+async def test_brake_survives_restart_and_release(stack):
+    from core.risk_guard import RiskGuard
+    db, *_ = stack
+    g = RiskGuard(db, 25)
+    await g.update(100.0)
+    await g.update(70.0)
+    again = RiskGuard(db, 25)
+    await again.load()
+    assert again.active
+    await again.release()
+    third = RiskGuard(db, 25)
+    await third.load()
+    assert not third.active and third.peak == pytest.approx(70.0)
+
+
+def test_single_instance_lock():
+    import run
+    first = run.acquire_single_instance_lock(47999)
+    assert first is not None
+    try:
+        assert run.acquire_single_instance_lock(47999) is None
+    finally:
+        first.close()

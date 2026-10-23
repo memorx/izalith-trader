@@ -83,6 +83,9 @@ class ReportsBot:
         """Lo que hay que atender ahora. La llave sirve para no repetir la misma alerta."""
         s = self.system
         out: Dict[str, str] = {}
+        guard = getattr(s, "guard", None)
+        if guard is not None and guard.active:
+            out["freno"] = f"Freno de emergencia activo: {guard.state.get('motivo')}"
         for name, err in s.module_errors.items():
             out[f"modulo:{name}"] = f"El módulo {name} se detuvo: {err}"
         for o in s.unrecorded_orders:

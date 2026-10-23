@@ -14,6 +14,7 @@ murió entre mandar y anotar) y le pregunta al exchange qué pasó con cada una.
 from typing import Dict, List, Optional
 
 from core.adapters.base import BaseAdapter, OrderResult, new_client_order_id
+from core.risk_guard import get_guard
 from core.utils.database import Database
 from core.utils.logger import get_logger
 
@@ -43,6 +44,12 @@ async def execute_order(
         close_side: 'long' o 'short' si la orden cierra una posición (usa close_position)
         passive: orden límite que espera en el libro (más barata; el adaptador decide si la soporta)
     """
+    guard = get_guard()
+    if guard is not None and not guard.allows(side, close_side, adapter.supports_short):
+        logger.warning(f"[{module}] Freno de emergencia activo: no se manda {side} {symbol}")
+        return OrderResult(success=False, symbol=symbol, side=side, status="freno",
+                           error="Freno de emergencia activo: sólo se permiten órdenes que reducen la exposición")
+
     if purpose:
         prior = await db.get_order_by_purpose(purpose)
         if prior:

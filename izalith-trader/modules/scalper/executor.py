@@ -149,7 +149,7 @@ class ScalperExecutor:
         result = await execute_order(self.db, adapter, MODULE, signal.symbol, signal.action, quantity=quantity,
                                      purpose=f"scalper:entry:{signal.symbol}:{candle}")
         if not result.success or result.filled_quantity <= 0:
-            if result.status != "duplicate":
+            if result.status not in ("duplicate", "freno"):
                 logger.error(f"Entry failed for {signal.symbol}: {result.error}")
             return result
 
