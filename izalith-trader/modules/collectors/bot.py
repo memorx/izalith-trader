@@ -19,12 +19,17 @@ logger = get_logger("collectors")
 class CollectorsBot:
     def __init__(self, db: Database, config: dict):
         self.db = db
+        self.banxico_token = config.get("banxico_token", "")
         self.interval = max(5, int(config.get("collectors_interval_minutes", 15))) * 60
         self.latest: Dict = {}
         self._running = False
 
     async def collect_once(self) -> Dict:
         snap = await asyncio.to_thread(sources.collect_all)
+        try:
+            snap["termometros"] = await asyncio.to_thread(sources.thermometers, self.banxico_token)
+        except Exception as e:
+            snap["termometros"] = {"error": str(e)}
         self.latest = snap
         await self._store(snap)
         return snap
@@ -42,6 +47,7 @@ class CollectorsBot:
             "acciones": [(r["coin"], r["mark"], round(r["apr"], 4)) for r in f.get("perpetuos_no_cripto", [])[:40]],
             "bitso": [(p["par"], round(p["prima_pct"], 4)) for p in snap.get("bitso", {}).get("pares", [])],
             "usdt_vs_usd": snap.get("bitso", {}).get("prima_usdt_vs_usd_pct"),
+            "termometros": {r["key"]: r["valor"] for r in snap.get("termometros", {}).get("lecturas", [])},
             "paises": [(r["pais"], None if r.get("prima_usdt_pct") is None else round(r["prima_usdt_pct"], 3),
                         None if r.get("prima_btc_pct") is None else round(r["prima_btc_pct"], 3))
                        for r in snap.get("paises", {}).get("paises", [])],

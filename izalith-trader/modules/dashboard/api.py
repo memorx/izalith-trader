@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config.assets import ASSETS
@@ -134,6 +134,28 @@ def create_app(system=None, token: str = "") -> FastAPI:
         db = need("db")
         return {"orders": await db.get_recent_orders(max(1, min(limit, 500)))}
 
+    @app.get("/api/export.csv")
+    async def export_csv(anio: Optional[int] = None, papel: bool = True):
+        """Operaciones cerradas en CSV para el contador (columnas en español)."""
+        import csv
+        import io
+        from zoneinfo import ZoneInfo
+        from tools.exportar import COLUMNS, rows_for_csv
+        db = need("db")
+        trades = await db.get_closed_trades(since_iso=f"{anio}-01-01" if anio else None)
+        if anio:
+            trades = [t for t in trades if (t.get("closed_at") or "")[:4] == str(anio)]
+        if not papel:
+            trades = [t for t in trades if not t.get("simulated")]
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=COLUMNS)
+        w.writeheader()
+        for row in rows_for_csv(trades, ZoneInfo(system.settings.trading_timezone)):
+            w.writerow(row)
+        name = f"operaciones_{anio or 'todas'}.csv"
+        return Response(content="\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
     @app.get("/api/signals")
     async def signals():
         db = need("db")
@@ -203,6 +225,23 @@ def create_app(system=None, token: str = "") -> FastAPI:
         snap = await asyncio.to_thread(sources.collect_all)
         cache.put("collectors", snap)
         return snap
+
+    @app.get("/api/termometros")
+    async def termometros(refresh: bool = False):
+        from modules.collectors import sources
+        from config.settings import get_settings
+        inst = system.instances.get("collectors") if system else None
+        latest = (inst.get_latest() or {}).get("termometros") if inst is not None else None
+        hist = cache.get("termo_hist", ttl=3600)
+        if hist is None or refresh:
+            hist = await asyncio.to_thread(sources.thermometer_history)
+            cache.put("termo_hist", hist)
+        if latest is None or refresh:
+            latest = cache.get("termo_now", ttl=900)
+            if latest is None or refresh:
+                latest = await asyncio.to_thread(sources.thermometers, get_settings().banxico_token)
+                cache.put("termo_now", latest)
+        return {"actual": latest, "series": hist}
 
     return app
 

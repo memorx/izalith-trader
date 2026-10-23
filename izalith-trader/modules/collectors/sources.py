@@ -241,6 +241,86 @@ def country_premiums() -> Dict:
             "fx_fecha": fx.get("time_last_update_utc"), "paises": rows}
 
 
+# ══════════ Termómetros: macro y apalancamiento ══════════
+
+def _last_change(s, days):
+    s = s.dropna()
+    if s.empty:
+        return None, None
+    last = float(s.iloc[-1])
+    past = s[s.index <= s.index[-1] - __import__("pandas").Timedelta(days=days)]
+    return last, (float(past.iloc[-1]) if len(past) else None)
+
+
+def thermometers(banxico_token: str = "") -> Dict:
+    """
+    Lo que dice el mundo hoy, en una foto. Cada lectura trae su valor y cómo estaba hace 30 días.
+    Las series largas salen de lab.data (con caché); el apalancamiento de cripto, de Binance.
+    """
+    from lab import data as D
+    out = {"ts": datetime.now(timezone.utc).isoformat(), "lecturas": [], "errores": {}}
+
+    def add(key, nombre, unidad, fn, days=30, lectura=None):
+        try:
+            last, prev = _last_change(fn(), days)
+            out["lecturas"].append({"key": key, "nombre": nombre, "unidad": unidad, "valor": last,
+                                    "hace_30d": prev, "lectura": lectura(last, prev) if lectura and last is not None else None})
+        except Exception as e:
+            out["errores"][key] = str(e)[:120]
+
+    add("curva", "Curva de tasas EE.UU. (10 años - 3 meses)", "puntos", D.yield_curve,
+        lectura=lambda v, p: "invertida: históricamente avisa recesión" if v < 0 else "normal")
+    add("credito", "Bonos de alto riesgo contra Tesoro (HYG/IEF)", "índice", D.credit_stress,
+        lectura=lambda v, p: None if p is None else ("se estresa" if v < p * 0.97 else "tranquilo"))
+    add("vix", "VIX (miedo en acciones)", "puntos", lambda: D.load_yf("^VIX", "2000-01-01")["close"],
+        lectura=lambda v, p: "miedo alto" if v > 25 else "calma" if v < 15 else "normal")
+    add("dolar", "Índice del dólar (DXY)", "puntos", lambda: D.load_yf("DX-Y.NYB", "2000-01-01")["close"])
+    add("boc", "Tasa del Banco de Canadá", "%", D.boc_series)
+    if banxico_token:
+        add("banxico", "Tasa objetivo de Banxico", "%", lambda: D.banxico_series("SF61745", banxico_token))
+    add("stablecoins", "Stablecoins en circulación", "USD", D.stablecoin_supply,
+        lectura=lambda v, p: None if p is None else ("entra dinero a cripto" if v > p * 1.01 else
+                                                      "sale dinero de cripto" if v < p * 0.99 else "estable"))
+    add("dvol_btc", "Volatilidad esperada de BTC (DVOL)", "%", lambda: D.deribit_dvol("BTC"),
+        lectura=lambda v, p: "el mercado espera movimientos fuertes" if v > 60 else "calma" if v < 40 else "normal")
+    add("dvol_eth", "Volatilidad esperada de ETH (DVOL)", "%", lambda: D.deribit_dvol("ETH"))
+
+    # Apalancamiento en perpetuos: Binance sólo guarda 30 días de historia
+    for sym in ("BTCUSDT", "ETHUSDT"):
+        try:
+            oi = _get(f"https://fapi.binance.com/futures/data/openInterestHist?symbol={sym}&period=1d&limit=30")
+            ls = _get(f"https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol={sym}&period=1d&limit=2")
+            v, p = float(oi[-1]["sumOpenInterestValue"]), float(oi[0]["sumOpenInterestValue"])
+            out["lecturas"].append({"key": f"oi_{sym}", "nombre": f"Apalancamiento abierto en {sym[:-4]} (Binance)",
+                                    "unidad": "USD", "valor": v, "hace_30d": p,
+                                    "lectura": "sube el apalancamiento" if v > p * 1.15 else
+                                    "se desapalanca" if v < p * 0.85 else "estable"})
+            r = float(ls[-1]["longShortRatio"])
+            out["lecturas"].append({"key": f"ls_{sym}", "nombre": f"Cuentas en largo por cada una en corto, {sym[:-4]}",
+                                    "unidad": "x", "valor": r, "hace_30d": None,
+                                    "lectura": "muy cargado al alza" if r > 2.5 else "cargado a la baja" if r < 0.8 else "parejo"})
+        except Exception as e:
+            out["errores"][f"oi_{sym}"] = str(e)[:120]
+    return out
+
+
+def thermometer_history(years: int = 3) -> Dict:
+    """Series de los últimos años para las gráficas del panel (una muestra por semana)."""
+    import pandas as pd
+    from lab import data as D
+    since = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=365 * years)
+    series = {}
+    for key, fn in (("curva", D.yield_curve), ("credito", D.credit_stress),
+                    ("stablecoins", D.stablecoin_supply), ("dvol_btc", lambda: D.deribit_dvol("BTC"))):
+        try:
+            s = fn()
+            s = s[s.index >= since].resample("W").last().dropna()
+            series[key] = [[ts.strftime("%Y-%m-%d"), round(float(v), 4)] for ts, v in s.items()]
+        except Exception as e:
+            series[key] = {"error": str(e)[:120]}
+    return series
+
+
 # ══════════ Mercados de predicción ══════════
 
 def polymarket_top(limit: int = 30) -> Dict:

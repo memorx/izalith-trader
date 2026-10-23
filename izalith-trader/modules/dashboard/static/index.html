@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>Izalith Trader</title>
-  <link rel="stylesheet" href="/static/styles.css?v=7">
+  <link rel="stylesheet" href="/static/styles.css?v=9">
 </head>
 <body>
 <div class="shell">
@@ -138,7 +138,7 @@
       <div class="panel"><div class="panel-head"><h3>Estrategias del laboratorio corriendo</h3><span class="muted small">Cada una con su propio capital</span></div><div id="sleeves"></div></div>
       <div class="panel"><h3>Posiciones abiertas</h3><div id="positions"></div></div>
       <div class="grid-2">
-        <div class="panel"><h3>Operaciones recientes</h3><div id="trades"></div></div>
+        <div class="panel"><div class="panel-head"><h3>Operaciones recientes</h3><span class="spacer"></span><a id="export-csv" class="icon-btn" href="/api/export.csv" download>Descargar CSV para el contador</a></div><div id="trades"></div></div>
         <div class="panel"><h3>Órdenes enviadas</h3><div id="orders"></div></div>
       </div>
       <div class="panel"><h3>Señales de hoy</h3><div id="signals"></div></div>
@@ -153,6 +153,17 @@
       <button id="refresh-markets" class="icon-btn" type="button">Actualizar ahora</button>
       <span id="markets-ts" class="muted small"></span>
     </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Termómetros del mundo</h3><span class="muted small">Cómo están hoy y cómo estaban hace 30 días</span></div>
+      <div id="termo-tiles" class="tiles" style="margin-bottom:8px"></div>
+      <div class="grid-2">
+        <div><h3>Curva de tasas (10 años - 3 meses)</h3><p class="muted small" style="margin-top:-6px">Abajo de cero = invertida; antes de cada recesión de EE.UU. desde los 70.</p><div id="termo-curva" class="viz"></div></div>
+        <div><h3>Stablecoins en circulación</h3><p class="muted small" style="margin-top:-6px">Si crece, entra dinero nuevo a cripto.</p><div id="termo-stables" class="viz"></div></div>
+        <div><h3>Bonos de alto riesgo contra Tesoro</h3><p class="muted small" style="margin-top:-6px">Si baja rápido, el mercado de crédito se asusta.</p><div id="termo-credito" class="viz"></div></div>
+        <div><h3>Volatilidad esperada de BTC</h3><p class="muted small" style="margin-top:-6px">Lo que el mercado de opciones cree que se va a mover BTC en 30 días.</p><div id="termo-dvol" class="viz"></div></div>
+      </div>
+    </div>
+
     <div class="grid-2">
       <div class="panel">
         <div class="panel-head"><h3>Funding de BTC, ETH y SOL por exchange</h3></div>
@@ -189,7 +200,7 @@
   </section>
 </div>
 
-<script src="/static/charts.js?v=7"></script>
-<script src="/static/app.js?v=7"></script>
+<script src="/static/charts.js?v=9"></script>
+<script src="/static/app.js?v=9"></script>
 </body>
 </html>
