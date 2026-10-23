@@ -125,3 +125,23 @@ async def test_allocator_refuses_mixed_accounts_only_in_real(db):
     assert await _bot(db, markets, paper=True)._data_problem("alloc:p", extra, {"SPY": 1.0}, {}) is None
     problem = await _bot(db, markets, paper=False)._data_problem("alloc:r", extra, {"SPY": 1.0}, {})
     assert problem and "cuentas distintas" in problem
+
+
+@pytest.mark.asyncio
+async def test_every_stop_call_waits_for_the_same_shutdown():
+    """Antes la segunda llamada regresaba de inmediato y asyncio cancelaba el apagado a la mitad."""
+    import asyncio
+    import run
+    system = run.IzalithSystem(["dashboard"])
+    calls = []
+
+    async def slow_shutdown():
+        calls.append("inicio")
+        await asyncio.sleep(0.2)
+        calls.append("fin")
+    system._shutdown = slow_shutdown
+    first = asyncio.create_task(system.stop())
+    await asyncio.sleep(0.05)
+    await system.stop()                     # la del final de main()
+    assert calls == ["inicio", "fin"]       # una sola vez, y ya terminó
+    await first
