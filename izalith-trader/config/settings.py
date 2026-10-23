@@ -31,6 +31,12 @@ class Settings:
     oanda_api_key: str = ""
     oanda_practice: bool = True
 
+    # Acciones: auto (Alpaca si hay llaves, si no Yahoo en papel), alpaca o ibkr
+    stocks_broker: str = "auto"
+    ibkr_host: str = "127.0.0.1"
+    ibkr_port: int = 4002                        # IB Gateway: 4002 papel, 4001 real. TWS: 7497 papel, 7496 real
+    ibkr_client_id: int = 17
+
     # Stocks (Alpaca)
     alpaca_api_key: str = ""
     alpaca_secret_key: str = ""
@@ -74,6 +80,11 @@ class Settings:
 
     # Collectors (mercados poco vigilados)
     collectors_interval_minutes: int = 15
+    banxico_token: str = ""                      # gratis en banxico.org.mx/SieAPIRest (tasa de Banxico)
+
+    # Reportes y alarmas
+    report_hour: int = 21                        # hora local del resumen diario por Telegram
+    healthcheck_url: str = ""                    # URL de healthchecks.io: avisa por correo si el bot muere
 
     # Dashboard Module
     dashboard_port: int = 8765                   # 8080 suele estar ocupado por otras apps
@@ -144,6 +155,10 @@ class Settings:
             oanda_practice=get_bool("OANDA_PRACTICE", True),
 
             # Stocks
+            stocks_broker=os.getenv("STOCKS_BROKER", "auto").strip().lower(),
+            ibkr_host=os.getenv("IBKR_HOST", "127.0.0.1"),
+            ibkr_port=get_int("IBKR_PORT", 4002),
+            ibkr_client_id=get_int("IBKR_CLIENT_ID", 17),
             alpaca_api_key=os.getenv("ALPACA_API_KEY", ""),
             alpaca_secret_key=os.getenv("ALPACA_SECRET_KEY", ""),
             alpaca_paper=get_bool("ALPACA_PAPER", True),
@@ -186,6 +201,11 @@ class Settings:
 
             # Collectors
             collectors_interval_minutes=get_int("COLLECTORS_INTERVAL_MINUTES", 15),
+            banxico_token=os.getenv("BANXICO_TOKEN", ""),
+
+            # Reportes
+            report_hour=get_int("REPORT_HOUR", 21),
+            healthcheck_url=os.getenv("HEALTHCHECK_URL", ""),
 
             # Dashboard
             dashboard_port=get_int("DASHBOARD_PORT", 8765),

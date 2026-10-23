@@ -38,7 +38,7 @@ SNAPSHOT_SECONDS = 300
 class IzalithSystem:
     """Main trading system orchestrator."""
 
-    AVAILABLE_MODULES = ["signals", "dca", "grid", "scalper", "allocator", "collectors", "dashboard"]
+    AVAILABLE_MODULES = ["signals", "dca", "grid", "scalper", "allocator", "collectors", "reports", "dashboard"]
 
     def __init__(self, modules: Optional[List[str]] = None):
         self.settings = get_settings()
@@ -90,10 +90,14 @@ class IzalithSystem:
                                                 testnet=s.binance_testnet, exchange_id=s.crypto_exchange, **common)
         self.adapters["forex"] = ForexAdapter(account_id=s.oanda_account_id, api_key=s.oanda_api_key,
                                               practice=s.oanda_practice, **common)
-        self.adapters["stock"] = StocksAdapter(api_key=s.alpaca_api_key, secret_key=s.alpaca_secret_key,
-                                               paper=s.alpaca_paper, **common)
+        if s.stocks_broker == "ibkr":
+            from core.adapters.ibkr import IBKRAdapter
+            self.adapters["stock"] = IBKRAdapter(host=s.ibkr_host, port=s.ibkr_port, client_id=s.ibkr_client_id, **common)
+        else:
+            self.adapters["stock"] = StocksAdapter(api_key=s.alpaca_api_key, secret_key=s.alpaca_secret_key,
+                                                   paper=s.alpaca_paper, **common)
         names = {"crypto": s.crypto_exchange.capitalize(), "forex": "OANDA",
-                 "stock": "Alpaca" if s.alpaca_api_key else "Yahoo (sólo papel)"}
+                 "stock": "IBKR" if s.stocks_broker == "ibkr" else "Alpaca" if s.alpaca_api_key else "Yahoo (sólo papel)"}
         for market, adapter in self.adapters.items():
             adapter._simulated_balance = {"USD": s.paper_cash_usd, "USDT": s.paper_cash_usd}
             await adapter.connect()
@@ -133,6 +137,9 @@ class IzalithSystem:
             "allocator_check_minutes": s.allocator_check_minutes,
             "allocator_passive_orders": s.allocator_passive_orders,
             "collectors_interval_minutes": s.collectors_interval_minutes,
+            "banxico_token": s.banxico_token,
+            "report_hour": s.report_hour,
+            "healthcheck_url": s.healthcheck_url,
             "dashboard_port": s.dashboard_port,
             "dashboard_host": s.dashboard_host,
             "dashboard_token": s.dashboard_token,
@@ -200,6 +207,9 @@ class IzalithSystem:
         elif name == "collectors":
             from modules.collectors.bot import CollectorsBot
             bot = CollectorsBot(self.db, config)
+        elif name == "reports":
+            from modules.reports.bot import ReportsBot
+            bot = ReportsBot(self, config)
         elif name == "dashboard":
             return self._run_dashboard(config)
         else:
@@ -300,7 +310,8 @@ async def main():
         print("  grid       - Rejilla de compras y ventas en un rango")
         print("  scalper    - Intradía (en rojo en el laboratorio: sólo papel)")
         print("  allocator  - Estrategias del laboratorio en vivo, cada una con su capital")
-        print("  collectors - Fotos de funding entre exchanges, prima de Bitso y Polymarket")
+        print("  collectors - Fotos de funding, dólar cripto por país, termómetros y Polymarket")
+        print("  reports    - Resumen diario y alertas por Telegram, latido para healthchecks.io")
         print("  dashboard  - Panel web")
         print("\nExample: python run.py --modules allocator,collectors,dashboard")
         return

@@ -436,6 +436,7 @@
     $("#vivo-body").hidden = !st.running;
     if (!st.running) return;
 
+    $("#export-csv").href = "/api/export.csv" + (token ? "?token=" + encodeURIComponent(token) : "");
     const [p, tr, od, sg] = await Promise.all([api("/api/portfolio"), api("/api/trades?limit=40"), api("/api/orders?limit=30"), api("/api/signals")]);
     let alloc = null;
     try { alloc = await api("/api/modules/allocator"); } catch (e) { /* allocator apagado */ }
@@ -496,11 +497,50 @@
     const btn = $("#refresh-markets");
     btn.disabled = true; btn.textContent = "Actualizando…";
     try {
-      const snap = await api("/api/collectors" + (refresh ? "?refresh=true" : ""));
+      const [snap, termo] = await Promise.all([
+        api("/api/collectors" + (refresh ? "?refresh=true" : "")),
+        api("/api/termometros" + (refresh ? "?refresh=true" : "")).catch(() => null),
+      ]);
       renderMarkets(snap);
+      if (termo) renderTermometros(termo);
     } finally {
       btn.disabled = false; btn.textContent = "Actualizar ahora";
     }
+  }
+
+  function renderTermometros(t) {
+    const fmtVal = (r) => {
+      if (r.valor === null || r.valor === undefined) return "—";
+      if (r.unidad === "USD") return "$" + fmt.compact(r.valor);
+      if (r.unidad === "%") return fmt.num(r.valor, r.valor < 10 ? 2 : 1) + "%";
+      if (r.unidad === "x") return fmt.num(r.valor, 2) + "x";
+      return fmt.num(r.valor, 2);
+    };
+    const tiles = (t.actual && t.actual.lecturas) || [];
+    fill($("#termo-tiles"), ...tiles.map((r) => {
+      let delta = r.lectura || "";
+      if (r.hace_30d) {
+        const ch = r.unidad === "puntos" || r.unidad === "%" ? r.valor - r.hace_30d : r.valor / r.hace_30d - 1;
+        const chTxt = r.unidad === "puntos" || r.unidad === "%" ? (ch >= 0 ? "+" : "") + fmt.num(ch, 2) : fmt.pct(ch, 1);
+        delta = `${chTxt} en 30 días${r.lectura ? ", " + r.lectura : ""}`;
+      }
+      return tile(r.nombre, fmtVal(r), delta);
+    }));
+    const s = t.series || {};
+    const pts = (arr) => (Array.isArray(arr) ? arr.map(([d, v]) => [Date.parse(d), v]) : []);
+    const draws = [
+      ["#termo-curva", "curva", (v) => fmt.num(v, 1), true],
+      ["#termo-stables", "stablecoins", (v) => "$" + fmt.compact(v), false],
+      ["#termo-credito", "credito", (v) => fmt.num(v, 3), false],
+      ["#termo-dvol", "dvol_btc", (v) => fmt.num(v, 0) + "%", false],
+    ];
+    const render = () => draws.forEach(([sel, key, f, zero]) => Viz.line($(sel), {
+      series: [{ name: key, color: css("--series-1"), values: pts(s[key]), area: !zero }],
+      yFormat: f, height: 170, zero, reference: zero ? 0 : undefined, label: key,
+      empty: (s[key] && s[key].error) || "Sin datos",
+    }));
+    render();
+    chartRenders[2] = render;
   }
 
   function renderMarkets(snap) {

@@ -242,3 +242,114 @@ def tbill_daily_rate(since: str = "1995-01-01") -> pd.Series:
     daily = (1 + irx) ** (1 / 365) - 1
     full = daily.reindex(pd.date_range(daily.index[0], daily.index[-1], freq="D", tz="UTC")).ffill()
     return full.rename("cash")
+
+
+# ══════════ Termómetros: macro, stablecoins, volatilidad, apalancamiento ══════════
+#
+# FRED no siempre contesta (desde la red de Memo no respondió el 22 oct 2026), así que cada
+# serie macro tiene un equivalente de Yahoo:
+#   curva 10 años - 3 meses  -> ^TNX - ^IRX
+#   miedo crediticio         -> HYG / IEF (bonos de alto riesgo contra bonos del Tesoro)
+#   miedo del mercado        -> ^VIX
+#   dólar                    -> DX-Y.NYB
+
+def _cached_series(kind: str, key: str, fetch, max_age_hours: float = 12) -> pd.Series:
+    path = _cache_path(kind, key)
+    if path.exists():
+        age = pd.Timestamp.now(tz="UTC") - pd.Timestamp(path.stat().st_mtime, unit="s", tz="UTC")
+        if age < pd.Timedelta(hours=max_age_hours):
+            return pd.read_parquet(path)["value"]
+    try:
+        s = fetch()
+        s = s[~s.index.duplicated(keep="last")].sort_index().rename("value")
+        s.to_frame().to_parquet(path)
+        return s
+    except Exception as e:
+        if path.exists():
+            logger.warning(f"{kind}/{key}: se usa la copia guardada ({e})")
+            return pd.read_parquet(path)["value"]
+        raise
+
+
+def fred_series(series_id: str) -> pd.Series:
+    """Serie de FRED (Reserva Federal de St. Louis) por su CSV público."""
+    def fetch():
+        req = urllib.request.Request(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}",
+                                     headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            df = pd.read_csv(resp)
+        df.columns = ["date", "value"]
+        df["value"] = pd.to_numeric(df["value"], errors="coerce")
+        return df.dropna().set_index(pd.to_datetime(df.dropna()["date"], utc=True))["value"]
+    return _cached_series("fred", series_id, fetch, max_age_hours=24)
+
+
+def yield_curve() -> pd.Series:
+    """Diferencia 10 años - 3 meses en puntos porcentuales. Negativa = curva invertida."""
+    try:
+        return fred_series("T10Y3M")
+    except Exception:
+        tnx = load_yf("^TNX", "1995-01-01")["close"]
+        irx = load_yf("^IRX", "1995-01-01")["close"]
+        return (tnx - irx).dropna().rename("value")
+
+
+def credit_stress() -> pd.Series:
+    """HYG/IEF normalizado: baja cuando los bonos de alto riesgo sufren contra los del Tesoro."""
+    hyg = load_yf("HYG", "2007-01-01")["close"]
+    ief = load_yf("IEF", "2002-01-01")["close"]
+    return (hyg / ief).dropna().rename("value")
+
+
+def boc_series(series: str = "V39079") -> pd.Series:
+    """Banco de Canadá (Valet, sin llave). V39079 = tasa objetivo; FXUSDCAD = dólar canadiense."""
+    def fetch():
+        data = _get_json(f"https://www.bankofcanada.ca/valet/observations/{series}/json?start_date=2000-01-01")
+        obs = [(o["d"], float(o[series]["v"])) for o in data["observations"] if o.get(series, {}).get("v")]
+        return pd.Series([v for _, v in obs], index=pd.to_datetime([d for d, _ in obs], utc=True))
+    return _cached_series("boc", series, fetch)
+
+
+def banxico_series(series: str, token: str) -> pd.Series:
+    """Banxico SIE (pide token gratuito). SF61745 = tasa objetivo, SF43718 = tipo de cambio FIX."""
+    if not token:
+        raise ValueError("Falta BANXICO_TOKEN (se saca gratis en banxico.org.mx/SieAPIRest)")
+
+    def fetch():
+        data = _get_json(f"https://www.banxico.org.mx/SieAPIRest/service/v1/series/{series}/datos/2000-01-01/"
+                         f"{pd.Timestamp.now():%Y-%m-%d}?token={token}")
+        rows = data["bmx"]["series"][0]["datos"]
+        vals = [(r["fecha"], float(r["dato"].replace(",", ""))) for r in rows if r["dato"] not in ("N/E", "")]
+        return pd.Series([v for _, v in vals], index=pd.to_datetime([f for f, _ in vals], format="%d/%m/%Y", utc=True))
+    return _cached_series("banxico", series, fetch)
+
+
+def stablecoin_supply() -> pd.Series:
+    """Total de stablecoins en circulación en dólares (DefiLlama). Si crece, entra dinero a cripto."""
+    def fetch():
+        data = _get_json("https://stablecoins.llama.fi/stablecoincharts/all")
+        return pd.Series([float(d["totalCirculatingUSD"].get("peggedUSD", 0)) for d in data],
+                         index=pd.to_datetime([int(d["date"]) for d in data], unit="s", utc=True))
+    return _cached_series("defillama", "stablecoins", fetch)
+
+
+def deribit_dvol(currency: str = "BTC") -> pd.Series:
+    """Volatilidad implícita a 30 días que el mercado de opciones espera para BTC o ETH (DVOL, Deribit)."""
+    def fetch():
+        end = int(pd.Timestamp.now(tz="UTC").timestamp() * 1000)
+        start = int(pd.Timestamp("2021-03-01", tz="UTC").timestamp() * 1000)
+        rows = []
+        while end > start:
+            data = _get_json(f"https://www.deribit.com/api/v2/public/get_volatility_index_data?currency={currency}"
+                             f"&start_timestamp={start}&end_timestamp={end}&resolution=1D")["result"]
+            batch = data.get("data") or []
+            if not batch:
+                break
+            rows += batch
+            cont = data.get("continuation")
+            if not cont or cont >= end:
+                break
+            end = int(cont)
+            time.sleep(0.2)
+        return pd.Series([r[4] for r in rows], index=pd.to_datetime([r[0] for r in rows], unit="ms", utc=True))
+    return _cached_series("deribit", f"dvol_{currency}", fetch)
