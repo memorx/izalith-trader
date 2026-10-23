@@ -135,6 +135,7 @@
 
     // Avisos
     const alerts = [];
+    if (status.freno) alerts.push(["bad", `Freno de emergencia ACTIVO: ${status.freno.motivo}. No se abren posiciones nuevas; quítalo con python -m tools.freno --quitar cuando lo revises.`]);
     for (const o of status.unrecorded_orders || []) alerts.push(["bad", `La orden ${o.client_order_id} (${o.side} ${o.symbol}) se llenó en el exchange y el bot no la registró. Revísala a mano.`]);
     for (const [name, m] of Object.entries(status.modules || {})) if (m.error) alerts.push(["bad", `El módulo ${name} se detuvo: ${m.error}`]);
     for (const [name, m] of Object.entries(status.markets || {})) {
@@ -456,6 +457,8 @@
       $("#sleeves").replaceChildren(h("p", { class: "muted", text: "El allocator no está corriendo. Agrégalo a ACTIVE_MODULES y elige estrategias en ALLOCATOR_STRATEGIES." }));
     }
 
+    loadSeguimiento();
+
     Viz.table($("#positions"), [
       { key: "module", label: "Módulo" }, { key: "symbol", label: "Activo" },
       { key: "side", label: "Lado", render: (r) => (r.side === "long" ? "Largo" : "Corto") },
@@ -489,6 +492,31 @@
     ], sg.signals, { empty: "Sin señales hoy" });
   }
 
+  async function loadSeguimiento() {
+    const box = $("#seguimiento");
+    let data;
+    try { data = await api("/api/seguimiento"); } catch (e) {
+      fill(box, h("p", { class: "muted small", text: e.status === 404 ? "El allocator no está corriendo." : "Sin datos: " + e.message }));
+      return;
+    }
+    const pts = (arr) => (arr || []).map(([d, v]) => [Date.parse(d), v]);
+    const items = (data.estrategias || []).map((s) => {
+      const chart = h("div", { class: "viz" });
+      const text = s.rend_papel === undefined ? s.estado
+        : `Papel ${fmt.pct(s.rend_papel, 2)}, laboratorio ${fmt.pct(s.rend_laboratorio, 2)} en ${fmt.num(s.dias, 0)} días (${s.estado}).`;
+      const card = h("div", {}, h("h3", { text: s.nombre || s.key }), h("p", { class: "small muted", text }), chart);
+      setTimeout(() => Viz.line(chart, {
+        series: [
+          { name: "Papel", color: css("--series-1"), values: pts(s.curva_papel) },
+          { name: "Laboratorio", color: css("--bench"), values: pts(s.curva_laboratorio) },
+        ], yFormat: (v) => fmt.money(v, 2), height: 180, label: "Papel contra laboratorio",
+        empty: "Todavía no hay suficientes fotos: el allocator guarda una en cada revisión.",
+      }), 0);
+      return card;
+    });
+    fill(box, items.length ? h("div", { class: "grid-2" }, ...items) : h("p", { class: "muted", text: "Sin estrategias en el allocator." }));
+  }
+
   // ══ Mercados ══
 
   $("#refresh-markets").addEventListener("click", () => loadMarkets(true));
@@ -507,6 +535,7 @@
     const markets = api("/api/collectors" + q).then(renderMarkets).catch((e) => {
       $("#markets-ts").textContent = "No se pudieron leer los mercados: " + e.message;
     });
+    api("/api/polymarket-estudio").then(renderPolyStudy).catch(() => { /* estudio no corrido */ });
     const termo = api("/api/termometros" + q).then(renderTermometros).catch((e) => {
       fill($("#termo-tiles"), h("p", { class: "muted small", text: "Sin termómetros: " + e.message }));
     });
@@ -515,6 +544,25 @@
     } finally {
       btn.disabled = false; btn.textContent = "Actualizar ahora";
     }
+  }
+
+  function renderPolyStudy(st) {
+    $("#poly-study-panel").hidden = false;
+    const items = (st.calibracion || []).map((c) => ({ label: c.tramo, value: c.diferencia }));
+    const render = () => Viz.columns($("#poly-study-chart"), {
+      items, format: (v) => (v >= 0 ? "+" : "") + fmt.num(v * 100, 1) + " pts", height: 220,
+      seriesName: "real menos precio", label: "Calibración de Polymarket",
+    });
+    render();
+    chartRenders[3] = render;
+    const f = st.favoritos || {};
+    const parts = [`${st.mercados_con_foto} mercados resueltos (${st.reglas.volumen_minimo.toLocaleString("es-MX")} USD o más de volumen, desde ${st.reglas.desde}).`];
+    if (f.apuestas) {
+      parts.push(`Comprar el favorito a ${st.reglas.favorito_entre[0] * 100}–${st.reglas.favorito_entre[1] * 100}¢: ${f.apuestas} apuestas, ganó ${f.ganadas} cuando el precio prometía ${Math.round(f.esperadas_por_precio)}; ` +
+        `${fmt.pct(f.rend_promedio, 2)} por apuesta después de comisión y spread (z = ${fmt.num(f.z_rendimiento, 2)}; más de 2 o menos de -2 ya no parece azar).`);
+    }
+    if (st.nota) parts.push(st.nota);
+    $("#poly-study-text").textContent = parts.join(" ");
   }
 
   function renderTermometros(t) {

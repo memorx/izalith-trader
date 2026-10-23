@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>Izalith Trader</title>
-  <link rel="stylesheet" href="/static/styles.css?v=10">
+  <link rel="stylesheet" href="/static/styles.css?v=12">
 </head>
 <body>
 <div class="shell">
@@ -136,6 +136,10 @@
     <div id="vivo-offline" class="panel" hidden><p class="muted" style="margin:0">El bot no está corriendo.</p></div>
     <div id="vivo-body">
       <div class="panel"><div class="panel-head"><h3>Estrategias del laboratorio corriendo</h3><span class="muted small">Cada una con su propio capital</span></div><div id="sleeves"></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Papel contra laboratorio</h3><span class="muted small">Lo que hizo cada estrategia contra lo que su backtest dice que debió hacer en las mismas fechas. Con menos de un mes la diferencia es ruido.</span></div>
+        <div id="seguimiento"></div>
+      </div>
       <div class="panel"><h3>Posiciones abiertas</h3><div id="positions"></div></div>
       <div class="grid-2">
         <div class="panel"><div class="panel-head"><h3>Operaciones recientes</h3><span class="spacer"></span><a id="export-csv" class="icon-btn" href="/api/export.csv" download>Descargar CSV para el contador</a></div><div id="trades"></div></div>
@@ -190,6 +194,12 @@
       <p class="muted small" style="margin-top:-4px">Precio local del USDT contra el tipo de cambio oficial, y de BTC contra el precio global convertido. Donde hay control de cambios el dólar cripto sale caro; en Corea BTC suele cotizar arriba ("prima kimchi"). Es información: aprovecharla exige vivir y tener banco en ese país.</p>
       <div id="paises"></div>
     </div>
+    <div class="panel" id="poly-study-panel" hidden>
+      <div class="panel-head"><h3>¿Los precios de Polymarket dicen la verdad?</h3></div>
+      <p class="muted small" style="margin-top:-4px">Mercados ya resueltos: lo que costaba el "sí" 7 días antes del cierre contra cuántas veces de verdad ganó. Arriba de cero, el "sí" estaba barato; abajo, caro.</p>
+      <div id="poly-study-chart" class="viz"></div>
+      <p id="poly-study-text" class="small" style="margin-bottom:0"></p>
+    </div>
     <div class="panel"><h3>Polymarket: lo más operado hoy</h3><div id="polymarket"></div></div>
   </section>
 
@@ -200,7 +210,7 @@
   </section>
 </div>
 
-<script src="/static/charts.js?v=10"></script>
-<script src="/static/app.js?v=10"></script>
+<script src="/static/charts.js?v=12"></script>
+<script src="/static/app.js?v=12"></script>
 </body>
 </html>

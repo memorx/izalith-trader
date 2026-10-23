@@ -28,6 +28,7 @@ ROOT = Path(__file__).parent.parent.parent
 REPORT_PATH = ROOT / "data" / "lab" / "report.json"
 VENUES_PATH = ROOT / "data" / "lab" / "venues.json"
 SMALL_PATH = ROOT / "data" / "lab" / "small_account.json"
+POLY_PATH = ROOT / "data" / "lab" / "polymarket.json"
 STATIC_DIR = Path(__file__).parent / "static"
 
 
@@ -110,6 +111,8 @@ def create_app(system=None, token: str = "") -> FastAPI:
             "markets": system.feed.get_market_status() if system.feed else {},
             "modules": modules,
             "unrecorded_orders": system.unrecorded_orders,
+            "freno": (system.guard.state if getattr(system, "guard", None) else None),
+            "max_drawdown_pct": s.max_drawdown_pct,
         }
 
     @app.get("/api/portfolio")
@@ -195,6 +198,12 @@ def create_app(system=None, token: str = "") -> FastAPI:
             raise HTTPException(404, "Corre: python -m lab.small_account")
         return json.loads(SMALL_PATH.read_text(encoding="utf-8"))
 
+    @app.get("/api/polymarket-estudio")
+    async def polymarket_estudio():
+        if not POLY_PATH.exists():
+            raise HTTPException(404, "Corre: python -m lab.polymarket_study")
+        return json.loads(POLY_PATH.read_text(encoding="utf-8"))
+
     @app.get("/api/lab/{key}")
     async def lab_strategy(key: str):
         report = _load_report()
@@ -225,6 +234,27 @@ def create_app(system=None, token: str = "") -> FastAPI:
         snap = await asyncio.to_thread(sources.collect_all)
         cache.put("collectors", snap)
         return snap
+
+    @app.get("/api/seguimiento")
+    async def seguimiento():
+        """Cada estrategia del allocator contra su backtest en las mismas fechas."""
+        alloc = system.instances.get("allocator") if system else None
+        if alloc is None:
+            raise HTTPException(404, "El allocator no está corriendo")
+        cached = cache.get("seguimiento", ttl=1800)
+        if cached:
+            return cached
+        from lab.seguimiento import compare
+        out = []
+        for key in alloc.keys:
+            snaps = await system.db.get_sleeve_snapshots(alloc.module_name(key))
+            try:
+                out.append(await asyncio.to_thread(compare, key, snaps, alloc.capital))
+            except Exception as e:
+                out.append({"key": key, "estado": f"error: {e}"})
+        result = {"estrategias": out}
+        cache.put("seguimiento", result)
+        return result
 
     @app.get("/api/termometros")
     async def termometros(refresh: bool = False):
