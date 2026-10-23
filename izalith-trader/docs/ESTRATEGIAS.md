@@ -1,6 +1,6 @@
 # Estrategias: revisión con datos reales
 
-Generado: 2026-10-23 03:33 UTC. Todos los números son **después de comisiones y deslizamiento**.
+Generado: 2026-10-23 05:05 UTC. Todos los números son **después de comisiones y deslizamiento**.
 Se usan los parámetros de libro, sin optimizar. 'Efectivo' es el T-bill de EE.UU. a 3 meses.
 
 Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.
@@ -40,6 +40,10 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 | 🔴 | Países fuertes con moneda fuerte (inventada) | Agresiva | +9.0% | +2.4% | -49% | 0.41 | +5.6% | +11.2% / -55% |
 | 🟡 | BTC contra ETH (inventada) | Agresiva | +41.3% | +2.6% | -71% | 0.84 | +37.3% | +38.3% / -83% |
 | 🔴 | Carry de oro tokenizado (inventada) | Conservadora | +0.2% | +3.8% | -1% | -6.54 | +1.9% | +21.1% / -28% |
+| 🟡 | Freno por crédito (inventada) | Moderada | +14.0% | +2.6% | -24% | 0.97 | +10.7% | +15.1% / -34% |
+| 🟡 | Freno por curva invertida (inventada) | Moderada | +8.8% | +2.4% | -21% | 0.56 | +7.5% | +11.2% / -55% |
+| 🟡 | Freno por stablecoins (inventada) | Moderada | +17.2% | +2.6% | -23% | 0.89 | +11.5% | +27.0% / -83% |
+| 🔴 | Freno por pánico en opciones (inventada) | Moderada | +6.5% | +3.4% | -20% | 0.27 | +8.4% | +8.3% / -77% |
 | 🟢 | Portafolio de las 7 verdes | Moderada | +11.0% | +2.6% | -15% | 1.02 | +12.8% | +15.1% / -34% |
 | 🟢 | Portafolio chico: cripto + S&P 500 | Moderada | +15.2% | +2.6% | -22% | 1.03 | +14.0% | +15.1% / -34% |
 
@@ -405,13 +409,58 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Pruebas:** ❌ le gana al efectivo · ❌ fuera de muestra · ❌ doble costo · ❌ ejecutar tarde · ❌ parámetros vecinos · ✅ caída < 85% · ❌ 3+ años de historial · ❌ no fue suerte
 - **Ojo:** Historial corto: el perpetuo de PAXG existe desde marzo de 2025.
 
+### 🟡 Freno por crédito (inventada) (Moderada)
+
+- **Cómo gana:** El portafolio chico, pero en efectivo cuando los bonos de alto riesgo sufren contra los del Tesoro: el crédito suele asustarse antes que las acciones.
+- **Riesgos:** Señales falsas en sustos de crédito que no pasan a más.
+- **Dónde se opera:** Kraken (cripto) + IBKR (SPY)
+- **Capital mínimo sugerido:** 200 USD · **Frecuencia:** Diaria
+- **Datos:** Portafolio chico + HYG/IEF desde 2017
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
+- **Rendimiento anual:** +14.0% · **caída máxima:** -24% · **peor año:** -21% · **meses positivos:** 58%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
+- **Ojo:** Las piezas se eligieron por haber salido verdes: el resultado combinado hereda ese optimismo.
+
+### 🟡 Freno por curva invertida (inventada) (Moderada)
+
+- **Cómo gana:** La tendencia del S&P 500, pero sin acciones mientras la curva de tasas esté invertida: antes de cada recesión de EE.UU. desde los 70 la curva se invirtió.
+- **Riesgos:** La curva puede quedarse invertida mucho tiempo sin recesión (2022-2024) y dejarte fuera de la subida.
+- **Dónde se opera:** IBKR
+- **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Diaria
+- **Datos:** Faber + curva 10 años - 3 meses desde 1995
+- **Periodo:** 1995-01-03 a 2026-10-22 (31.8 años)
+- **Rendimiento anual:** +8.8% · **caída máxima:** -21% · **peor año:** -15% · **meses positivos:** 75%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
+
+### 🟡 Freno por stablecoins (inventada) (Moderada)
+
+- **Cómo gana:** La tendencia BTC+ETH, sólo cuando el total de stablecoins creció en el último mes: las stablecoins son el efectivo que entra a cripto.
+- **Riesgos:** El crecimiento de stablecoins puede ir detrás del precio, no adelante.
+- **Dónde se opera:** Kraken / Binance (sólo spot)
+- **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Diaria
+- **Datos:** Tendencia BTC+ETH + stablecoins (DefiLlama) desde 2018
+- **Periodo:** 2017-11-29 a 2026-10-22 (8.9 años)
+- **Rendimiento anual:** +17.2% · **caída máxima:** -23% · **peor año:** -8% · **meses positivos:** 33%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
+
+### 🔴 Freno por pánico en opciones (inventada) (Moderada)
+
+- **Cómo gana:** La tendencia BTC+ETH, en efectivo mientras el mercado de opciones espere movimientos de más de 70% al año: es cuando vienen las liquidaciones en cascada.
+- **Riesgos:** La volatilidad alta también llega en las subidas fuertes.
+- **Dónde se opera:** Kraken / Binance (sólo spot)
+- **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Diaria
+- **Datos:** Tendencia BTC+ETH + DVOL (Deribit) desde 2021
+- **Periodo:** 2021-03-24 a 2026-10-22 (5.58 años)
+- **Rendimiento anual:** +6.5% · **caída máxima:** -20% · **peor año:** -16% · **meses positivos:** 28%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ❌ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
+
 ### 🟢 Portafolio de las 7 verdes (Moderada)
 
 - **Cómo gana:** Junta las 7 estrategias verdes que el bot puede operar, cada una con más o menos capital según su riesgo, y rebalancea cada mes: no depende de que un solo mercado vaya bien.
 - **Riesgos:** Si todos los mercados caen a la vez (2022) caen juntas; más piezas = más órdenes y más comisiones.
 - **Dónde se opera:** IBKR (ETFs) + Kraken o Binance (cripto)
 - **Capital mínimo sugerido:** 2000 USD · **Frecuencia:** Mensual
-- **Datos:** Las 7 estrategias del catálogo, desde 2018
+- **Datos:** Las 7 estrategias del catálogo, desde 2017
 - **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
 - **Rendimiento anual:** +11.0% · **caída máxima:** -15% · **peor año:** -9% · **meses positivos:** 69%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
@@ -423,7 +472,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Riesgos:** Las dos pueden caer juntas en un pánico general; con 200 dólares la comisión mínima de IBKR pesa.
 - **Dónde se opera:** Kraken (cripto) + IBKR (SPY)
 - **Capital mínimo sugerido:** 200 USD · **Frecuencia:** Mensual
-- **Datos:** Tendencia BTC+ETH y Faber, desde 2018
+- **Datos:** Tendencia BTC+ETH y Faber, desde 2017
 - **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
 - **Rendimiento anual:** +15.2% · **caída máxima:** -22% · **peor año:** -20% · **meses positivos:** 63%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
