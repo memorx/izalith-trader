@@ -133,3 +133,16 @@ def test_deflated_sharpe_needs_long_history():
     short = deflated_sharpe(1.0, 252, 252, 0.0, 3.0, 7)      # 1 año
     long = deflated_sharpe(1.0, 252, 252 * 20, 0.0, 3.0, 7)  # 20 años
     assert short < 0.95 < long
+
+
+def test_seguimiento_compares_paper_with_lab(monkeypatch):
+    import lab.seguimiento as S
+    from lab.catalog import Output
+    idx = pd.date_range("2026-10-01", periods=10, freq="D", tz="UTC")
+    fake_out = Output(returns=pd.Series(0.01, index=idx), equity=(1.01 ** np.arange(10)))
+    spec = type("Spec", (), {"nombre": "x", "params": {}, "run": staticmethod(lambda ctx, **k: fake_out)})()
+    monkeypatch.setattr(S, "get_spec", lambda key: spec)
+    snaps = [{"timestamp": (idx[0] + pd.Timedelta(days=i)).isoformat(), "equity": 100 * 1.01 ** i} for i in range(10)]
+    r = S.compare("x", snaps, 100.0, ctx=object())
+    assert r["rend_papel"] == pytest.approx(r["rend_laboratorio"], abs=0.02)
+    assert r["estado"] == "muy pronto para juzgar"
