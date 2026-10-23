@@ -108,9 +108,19 @@ class PortfolioTracker:
                 stop_loss=t.get("stop_loss"), take_profit=t.get("take_profit"),
                 simulated=bool(t.get("simulated")),
             )
-            if pos.key in self.positions:
-                # Dos trades abiertos del mismo módulo y símbolo (datos viejos): se juntan en uno
-                logger.warning(f"Trades abiertos duplicados para {pos.key}; se usa el más reciente")
+            prev = self.positions.get(pos.key)
+            if prev is not None:
+                if prev.side == pos.side and prev.trade_id and pos.trade_id:
+                    # Dos trades abiertos del mismo módulo y símbolo (datos viejos): se juntan en uno
+                    await self.db.merge_open_trades(prev.trade_id, pos.trade_id)
+                    qty = prev.quantity + pos.quantity
+                    prev.entry_price = (prev.cost_basis + pos.cost_basis) / qty
+                    prev.quantity = qty
+                    prev.current_price = prev.entry_price
+                    prev.fees += pos.fees
+                    logger.warning(f"Trades abiertos duplicados para {pos.key}: se juntaron en el trade {prev.trade_id}")
+                    continue
+                logger.error(f"Trades abiertos en lados contrarios para {pos.key}; se usa el más reciente. Revísalo.")
             self.positions[pos.key] = pos
 
         realized = await self.db.get_realized_pnl_total()
@@ -258,6 +268,10 @@ class PortfolioTracker:
 
     def get_cash_usd(self) -> float:
         return self.cash_usd
+
+    def held_quantity(self, symbol: str) -> float:
+        """Cantidad en largo de un símbolo sumando todos los módulos (lo que hay en la cuenta)."""
+        return sum(p.quantity for p in self.positions.values() if p.symbol == symbol and p.side == "long")
 
     def get_total_value_usd(self) -> float:
         shorts_pnl = sum(p.unrealized_pnl for p in self.positions.values() if p.side == "short")

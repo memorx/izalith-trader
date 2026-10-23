@@ -273,7 +273,7 @@ class ForexAdapter(BaseAdapter):
 
     async def get_balance(self) -> Dict[str, float]:
         if self.dry_run or self._simulation_mode:
-            return dict(self._simulated_balance)
+            return self._paper_balance()
         if not self._session:
             raise RuntimeError("Sin cuenta de OANDA conectada")
         url = f"{self.base_url}/accounts/{self.account_id}/summary"

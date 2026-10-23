@@ -148,7 +148,7 @@ class GridBot:
             adapter = self._adapter_for(symbol)
             if not price_data or not adapter:
                 continue
-            if not self.config.get("dry_run", True) and price_data.simulated:
+            if not adapter.is_paper and price_data.simulated:
                 continue
             for level in [l for l in levels if l.status == "pending"]:
                 if (level.side == "buy" and price_data.ask <= level.price) or \
@@ -172,7 +172,7 @@ class GridBot:
                                      purpose=f"grid:{symbol}:{level.id}",
                                      close_side="long" if level.side == "sell" else None)
         if not result.success or result.filled_quantity <= 0:
-            if result.status != "duplicate":
+            if result.status not in ("duplicate", "en_vuelo"):
                 self._failures[symbol] = self._failures.get(symbol, 0) + 1
                 logger.error(f"Grid order failed: {result.error}")
             return

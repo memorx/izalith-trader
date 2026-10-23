@@ -305,6 +305,22 @@ class Database:
         row = await cursor.fetchone()
         return dict(row) if row else None
 
+    async def merge_open_trades(self, keep_id: int, drop_id: int) -> None:
+        """Junta dos trades abiertos del mismo módulo, símbolo y lado: el promedio queda en keep_id."""
+        keep, drop = await self.get_trade(keep_id), await self.get_trade(drop_id)
+        if not keep or not drop or keep["status"] != "open" or drop["status"] != "open":
+            return
+        qty = float(keep["quantity"]) + float(drop["quantity"])
+        avg = (float(keep["quantity"]) * float(keep["entry_price"]) +
+               float(drop["quantity"]) * float(drop["entry_price"])) / qty
+        fees = float(keep.get("fees") or 0) + float(drop.get("fees") or 0)
+        await self._conn.execute("UPDATE trades SET quantity = ?, entry_price = ?, fees = ? WHERE id = ?",
+                                 (qty, avg, fees, keep_id))
+        await self._conn.execute(
+            "UPDATE trades SET status = 'merged', closed_at = ?, notes = ? WHERE id = ?",
+            (utcnow_iso(), f"Juntado con el trade {keep_id}", drop_id))
+        await self._conn.commit()
+
     async def get_open_trades(self, module: Optional[str] = None) -> List[Dict[str, Any]]:
         if module:
             cursor = await self._conn.execute(
@@ -403,6 +419,12 @@ class Database:
                 "SELECT * FROM orders WHERE status = 'pending' AND module = ? ORDER BY created_at", (module,))
         else:
             cursor = await self._conn.execute("SELECT * FROM orders WHERE status = 'pending' ORDER BY created_at")
+        return [dict(row) for row in await cursor.fetchall()]
+
+    async def get_orders_by_status(self, statuses) -> List[Dict[str, Any]]:
+        marks = ",".join("?" for _ in statuses)
+        cursor = await self._conn.execute(
+            f"SELECT * FROM orders WHERE status IN ({marks}) ORDER BY created_at", tuple(statuses))
         return [dict(row) for row in await cursor.fetchall()]
 
     async def get_order_by_purpose(self, purpose: str) -> Optional[Dict[str, Any]]:
