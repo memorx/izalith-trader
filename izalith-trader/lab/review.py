@@ -2,7 +2,7 @@
 Izalith Trading System - Revisión de todas las estrategias
 
 Corre cada estrategia del catálogo con sus parámetros de libro y la somete a
-cinco pruebas. Escribe data/lab/report.json (lo lee el dashboard) y
+seis pruebas de robustez más los candados que le apliquen. Escribe data/lab/report.json (lo lee el dashboard) y
 docs/ESTRATEGIAS.md (para leer).
 
 Uso:
@@ -17,8 +17,9 @@ Pruebas (semáforo):
   4. Aguanta ejecutar un periodo tarde (Sharpe >= 70% del original)
   5. Sus parámetros vecinos también funcionan (Sharpe mediano >= 70% del original)
   6. Su peor caída no pasa de 85% (más que eso es quiebra o liquidación)
-  Además: un sesgo conocido del backtest (supervivencia) la deja en amarillo como máximo, y
-  una estrategia de señales necesita al menos 30 operaciones para calificar.
+  Además: un sesgo conocido del backtest (supervivencia, o piezas elegidas por haber salido
+  verdes) la deja en amarillo como máximo, una estrategia de señales necesita al menos 30
+  operaciones para calificar, y un DCA con caídas de más de 60% queda en amarillo.
   Verde = pasa todo. Amarillo = 1, 3 y 6 bien y falla a lo más una. Rojo = lo demás.
 """
 import argparse
@@ -150,7 +151,7 @@ def evaluate(spec: Spec, ctx: Ctx, robustness: bool = True) -> dict:
     checks["sin_riesgo_de_ruina"] = full["max_drawdown"] > -0.85
     # Con menos de 3 años no hay ni un ciclo completo para juzgar
     checks["historial_suficiente"] = full["years"] >= 3
-    if "supervivencia" in str(out.extra.get("aviso", "")):
+    if "supervivencia" in str(out.extra.get("aviso", "")) or out.extra.get("sesgo_seleccion"):
         checks["sin_sesgo_conocido"] = False
     if spec.tipo == "signals":
         trades = out.extra.get("trade_stats", {}).get("trades", 0)
@@ -182,7 +183,11 @@ def grade(entry: dict) -> None:
     if entry["tipo"] == "dca":
         # DCA no es para ganarle al mercado: se califica por su TIR contra el efectivo
         irr = (entry.get("extra") or {}).get("irr", 0) or 0
-        entry["semaforo"] = "verde" if irr > full.get("cash_cagr", 0) and core_ok else "rojo"
+        if irr > full.get("cash_cagr", 0) and core_ok:
+            # Comprar cada semana no quita las caídas: con -60% o peor, amarillo
+            entry["semaforo"] = "verde" if full.get("max_drawdown", 0) > -0.60 else "amarillo"
+        else:
+            entry["semaforo"] = "rojo"
     elif len(checks) >= 6 and passed == len(checks):
         entry["semaforo"] = "verde"
     elif core_ok and passed >= len(checks) - 1:
@@ -200,7 +205,10 @@ def apply_luck_test(results: list, ctx: Ctx) -> None:
     Sharpe normal contra el efectivo.
     """
     invented = [e for e in results if e.get("inventada") and e.get("metricas")]
-    n_trials = max(1, len([s for s in CATALOG if s.inventada]))
+    # Cada idea cuenta con todas sus variantes probadas (parámetros vecinos), y la prueba misma se
+    # rediseñó una vez (22 oct 2026): se cuenta doble para no premiar haber buscado la forma de medir.
+    variants = sum(1 + sum(len(v) for v in s.grid.values()) for s in CATALOG if s.inventada)
+    n_trials = max(1, 2 * variants)
     for e in invented:
         spec = next(s for s in CATALOG if s.key == e["key"])
         out = spec.run(ctx, **spec.params)
@@ -243,7 +251,7 @@ def write_markdown(report: dict) -> None:
         f"Generado: {report['generado']}. Todos los números son **después de comisiones y deslizamiento**.",
         "Se usan los parámetros de libro, sin optimizar. 'Efectivo' es el T-bill de EE.UU. a 3 meses.",
         "",
-        "Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.",
+        "Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.",
         "",
         "| | Estrategia | Nivel | Rend. anual | Efectivo | Caída máx. | Sharpe | Fuera de muestra | Comprar y aguantar |",
         "|---|---|---|---|---|---|---|---|---|",

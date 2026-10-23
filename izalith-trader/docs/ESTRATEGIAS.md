@@ -1,51 +1,51 @@
 # Estrategias: revisión con datos reales
 
-Generado: 2026-10-23 05:05 UTC. Todos los números son **después de comisiones y deslizamiento**.
+Generado: 2026-10-23 07:53 UTC. Todos los números son **después de comisiones y deslizamiento**.
 Se usan los parámetros de libro, sin optimizar. 'Efectivo' es el T-bill de EE.UU. a 3 meses.
 
-Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.
+Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.
 
 | | Estrategia | Nivel | Rend. anual | Efectivo | Caída máx. | Sharpe | Fuera de muestra | Comprar y aguantar |
 |---|---|---|---|---|---|---|---|---|
-| 🟢 | Portafolio 60/40 | Conservadora | +8.5% | +1.7% | -32% | 0.66 | +9.5% | +11.2% / -55% |
-| 🟢 | Efectivo con tasa + 10% BTC | Conservadora | +9.9% | +2.6% | -17% | 0.88 | +9.1% | +38.3% / -83% |
-| 🟡 | Carry de funding BTC/ETH | Conservadora | +5.4% | +2.8% | -1% | 3.39 | +2.7% | +34.7% / -77% |
+| 🟢 | Portafolio 60/40 | Conservadora | +8.5% | +1.7% | -32% | 0.66 | +9.6% | +11.2% / -55% |
+| 🟢 | Efectivo con tasa + 10% BTC | Conservadora | +9.9% | +2.6% | -17% | 0.87 | +9.0% | +37.8% / -83% |
+| 🟡 | Carry de funding BTC/ETH | Conservadora | +5.4% | +2.8% | -1% | 3.36 | +2.7% | +34.1% / -77% |
 | 🟢 | DCA semanal al S&P 500 | Conservadora | +10.8% | +2.4% | -55% | 0.53 | +14.1% | +11.2% / -55% |
 | 🟢 | Tendencia S&P 500 (Faber) | Moderada | +9.6% | +2.4% | -24% | 0.59 | +8.4% | +11.2% / -55% |
 | 🟢 | Momentum dual (Antonacci) | Moderada | +9.2% | +1.7% | -34% | 0.54 | +8.8% | +11.2% / -55% |
 | 🟢 | Rebote corto en S&P 500 (RSI-2) | Moderada | +7.0% | +2.4% | -15% | 0.72 | +5.8% | +11.2% / -55% |
-| 🟢 | Tendencia BTC (promedio de 200 días) | Moderada | +24.7% | +2.6% | -64% | 0.68 | +32.8% | +38.3% / -83% |
-| 🟢 | Tendencia BTC+ETH con volatilidad controlada | Moderada | +21.2% | +2.6% | -25% | 1.00 | +12.6% | +38.3% / -83% |
-| 🔴 | Carry de funding en altcoins | Moderada | +5.7% | +2.8% | -1% | 2.75 | +1.8% | +34.7% / -77% |
-| 🟡 | Rotación a las cripto más fuertes | Agresiva | +78.3% | +2.6% | -72% | 1.14 | +38.4% | +38.3% / -83% |
-| 🟡 | Tortugas en perpetuos BTC/ETH (largo y corto) | Agresiva | +22.1% | +2.8% | -60% | 0.60 | +11.4% | +34.7% / -77% |
-| 🔴 | BTC 2x en tendencia | Agresiva | +13.0% | +2.8% | -93% | 0.53 | +18.6% | +34.7% / -77% |
-| 🔴 | Scalper momentum (bot actual) | Agresiva | -33.4% | +3.9% | -56% | -7.83 | -33.8% | +10.1% / -53% |
-| 🔴 | Scalper reversión a la media (bot actual) | Agresiva | +0.0% | +3.9% | +0% | 0.00 | +0.0% | +10.1% / -53% |
-| 🔴 | Scalper ruptura de 24h (bot actual) | Agresiva | -19.3% | +3.9% | -36% | -3.68 | -26.9% | +10.1% / -53% |
-| 🟢 | DCA semanal a BTC | Agresiva | +35.7% | +2.6% | -83% | 0.80 | +39.8% | +38.3% / -83% |
-| 🟡 | Mundo emergente en partes iguales | Agresiva | +7.0% | +2.3% | -69% | 0.31 | +4.8% | +7.0% / -77% |
-| 🟡 | Tendencia en cada país emergente | Moderada | +8.7% | +2.3% | -33% | 0.49 | +4.2% | +7.0% / -77% |
-| 🟡 | Tendencia en Latinoamérica | Agresiva | +10.1% | +2.3% | -53% | 0.49 | +5.4% | +9.1% / -65% |
-| 🟡 | Rotación a los países más fuertes | Agresiva | +9.0% | +2.4% | -55% | 0.42 | +5.7% | +11.2% / -55% |
+| 🟢 | Tendencia BTC (promedio de 200 días) | Moderada | +24.3% | +2.6% | -64% | 0.67 | +31.6% | +37.8% / -83% |
+| 🟢 | Tendencia BTC+ETH con volatilidad controlada | Moderada | +21.3% | +2.6% | -26% | 1.00 | +12.5% | +37.8% / -83% |
+| 🔴 | Carry de funding en altcoins | Moderada | +5.8% | +2.8% | -2% | 2.86 | +1.9% | +34.1% / -77% |
+| 🟡 | Rotación a las cripto más fuertes | Agresiva | +96.9% | +2.6% | -61% | 1.27 | +39.3% | +37.8% / -83% |
+| 🟡 | Tortugas en perpetuos BTC/ETH (largo y corto) | Agresiva | +22.1% | +2.8% | -60% | 0.60 | +12.1% | +34.1% / -77% |
+| 🔴 | BTC 2x en tendencia | Agresiva | +10.9% | +2.8% | -93% | 0.51 | +16.8% | +34.1% / -77% |
+| 🔴 | Scalper momentum (bot actual) | Agresiva | -33.4% | +3.9% | -56% | -7.84 | -33.9% | +10.7% / -53% |
+| 🔴 | Scalper reversión a la media (bot actual) | Agresiva | +0.0% | +3.9% | +0% | 0.00 | +0.0% | +10.7% / -53% |
+| 🔴 | Scalper ruptura de 24h (bot actual) | Agresiva | -19.3% | +3.9% | -36% | -3.68 | -27.0% | +10.7% / -53% |
+| 🟡 | DCA semanal a BTC | Agresiva | +35.0% | +2.6% | -83% | 0.79 | +38.5% | +37.8% / -83% |
+| 🟡 | Mundo emergente en partes iguales | Agresiva | +6.9% | +2.3% | -69% | 0.30 | +4.6% | +7.0% / -77% |
+| 🟡 | Tendencia en cada país emergente | Moderada | +8.6% | +2.3% | -33% | 0.48 | +4.1% | +7.0% / -77% |
+| 🟡 | Tendencia en Latinoamérica | Agresiva | +10.1% | +2.3% | -53% | 0.49 | +5.2% | +9.0% / -65% |
+| 🟡 | Rotación a los países más fuertes | Agresiva | +8.9% | +2.4% | -55% | 0.41 | +5.4% | +11.2% / -55% |
 | 🔬 | Mercados de predicción | Especulativa | — | — | — | — | — | — |
 | 🔬 | Diferencia de funding entre exchanges | Especulativa | — | — | — | — | — | — |
 | 🔬 | Acciones en perpetuo los fines de semana | Especulativa | — | — | — | — | — | — |
 | 🔬 | Dólar cripto por país | Especulativa | — | — | — | — | — | — |
 | 🔬 | Prima del peso en Bitso | Especulativa | — | — | — | — | — | — |
-| 🟡 | Freno de euforia (inventada) | Moderada | +14.7% | +2.8% | -25% | 0.75 | +7.0% | +34.7% / -77% |
-| 🔴 | Comprar la capitulación (inventada) | Agresiva | +14.0% | +2.8% | -35% | 0.51 | -2.2% | +34.7% / -77% |
+| 🟡 | Freno de euforia (inventada) | Moderada | +14.6% | +2.8% | -26% | 0.74 | +5.9% | +34.1% / -77% |
+| 🔴 | Comprar la capitulación (inventada) | Agresiva | +14.0% | +2.8% | -35% | 0.51 | -2.2% | +34.1% / -77% |
 | 🔴 | El peso como semáforo (inventada) | Moderada | +2.2% | +1.7% | -45% | 0.10 | -0.1% | +9.2% / -65% |
 | 🟡 | Cobre contra oro (inventada) | Moderada | +9.0% | +1.7% | -31% | 0.70 | +4.5% | +11.2% / -55% |
-| 🔴 | Países fuertes con moneda fuerte (inventada) | Agresiva | +9.0% | +2.4% | -49% | 0.41 | +5.6% | +11.2% / -55% |
-| 🟡 | BTC contra ETH (inventada) | Agresiva | +41.3% | +2.6% | -71% | 0.84 | +37.3% | +38.3% / -83% |
-| 🔴 | Carry de oro tokenizado (inventada) | Conservadora | +0.2% | +3.8% | -1% | -6.54 | +1.9% | +21.1% / -28% |
-| 🟡 | Freno por crédito (inventada) | Moderada | +14.0% | +2.6% | -24% | 0.97 | +10.7% | +15.1% / -34% |
+| 🔴 | Países fuertes con moneda fuerte (inventada) | Agresiva | +8.9% | +2.4% | -49% | 0.41 | +5.3% | +11.2% / -55% |
+| 🟡 | BTC contra ETH (inventada) | Agresiva | +39.2% | +2.6% | -77% | 0.81 | +33.9% | +37.8% / -83% |
+| 🔴 | Carry de oro tokenizado (inventada) | Conservadora | +0.2% | +3.8% | -1% | -6.55 | +1.9% | +19.3% / -28% |
+| 🔴 | Freno por crédito (inventada) | Moderada | +14.3% | +2.6% | -25% | 0.99 | +11.0% | +15.1% / -34% |
 | 🟡 | Freno por curva invertida (inventada) | Moderada | +8.8% | +2.4% | -21% | 0.56 | +7.5% | +11.2% / -55% |
-| 🟡 | Freno por stablecoins (inventada) | Moderada | +17.2% | +2.6% | -23% | 0.89 | +11.5% | +27.0% / -83% |
-| 🔴 | Freno por pánico en opciones (inventada) | Moderada | +6.5% | +3.4% | -20% | 0.27 | +8.4% | +8.3% / -77% |
-| 🟢 | Portafolio de las 7 verdes | Moderada | +11.0% | +2.6% | -15% | 1.02 | +12.8% | +15.1% / -34% |
-| 🟢 | Portafolio chico: cripto + S&P 500 | Moderada | +15.2% | +2.6% | -22% | 1.03 | +14.0% | +15.1% / -34% |
+| 🟡 | Freno por stablecoins (inventada) | Moderada | +17.7% | +2.6% | -23% | 0.91 | +12.4% | +27.0% / -83% |
+| 🔴 | Freno por pánico en opciones (inventada) | Moderada | +6.7% | +3.4% | -21% | 0.28 | +8.3% | +8.3% / -77% |
+| 🟡 | Portafolio de las 7 verdes | Moderada | +11.0% | +2.6% | -15% | 1.03 | +12.8% | +15.1% / -34% |
+| 🟡 | Portafolio chico: cripto + S&P 500 | Moderada | +15.6% | +2.6% | -23% | 1.05 | +14.3% | +15.1% / -34% |
 
 ## Detalle
 
@@ -67,7 +67,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** CETES Directo o cuenta con interés + Bitso/Binance/Kraken
 - **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Trimestral
 - **Datos:** BTC/USDT (Binance) + T-bill
-- **Periodo:** 2017-08-17 a 2026-10-21 (9.18 años)
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
 - **Rendimiento anual:** +9.9% · **caída máxima:** -17% · **peor año:** -8% · **meses positivos:** 56%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
 
@@ -78,8 +78,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance, Bybit u OKX (spot y perpetuos en la misma cuenta); Hyperliquid para el corto
 - **Capital mínimo sugerido:** 1000 USD · **Frecuencia:** Semanal
 - **Datos:** BTC/ETH spot + funding Binance desde 2019
-- **Periodo:** 2019-09-10 a 2026-10-21 (7.11 años)
-- **Rendimiento anual:** +5.4% · **caída máxima:** -1% · **peor año:** -1% · **meses positivos:** 74%
+- **Periodo:** 2019-09-10 a 2026-10-22 (7.12 años)
+- **Rendimiento anual:** +5.4% · **caída máxima:** -1% · **peor año:** -1% · **meses positivos:** 76%
 - **Pruebas:** ✅ le gana al efectivo · ❌ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
 
 ### 🟢 DCA semanal al S&P 500 (Conservadora)
@@ -90,7 +90,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Capital mínimo sugerido:** 50 USD · **Frecuencia:** Semanal
 - **Datos:** SPY (Yahoo)
 - **Periodo:** 1995-01-03 a 2026-10-22 (31.8 años)
-- **Resultado:** aportó 165,900, terminó con 1,262,328 (x7.61), TIR +10.8% anual
+- **Resultado:** aportó 165,900, terminó con 1,261,981 (x7.61), TIR +10.8% anual
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ caída < 85% · ✅ 3+ años de historial
 
 ### 🟢 Tendencia S&P 500 (Faber) (Moderada)
@@ -112,7 +112,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Mensual
 - **Datos:** SPY, EFA, AGG desde 2004
 - **Periodo:** 2003-09-29 a 2026-10-22 (23.06 años)
-- **Rendimiento anual:** +9.2% · **caída máxima:** -34% · **peor año:** -17% · **meses positivos:** 66%
+- **Rendimiento anual:** +9.2% · **caída máxima:** -34% · **peor año:** -17% · **meses positivos:** 65%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
 
 ### 🟢 Rebote corto en S&P 500 (RSI-2) (Moderada)
@@ -133,8 +133,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Bitso, Binance, Kraken o Coinbase
 - **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Diaria
 - **Datos:** BTC/USDT Binance desde 2017
-- **Periodo:** 2017-08-17 a 2026-10-21 (9.18 años)
-- **Rendimiento anual:** +24.7% · **caída máxima:** -64% · **peor año:** -35% · **meses positivos:** 32%
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
+- **Rendimiento anual:** +24.3% · **caída máxima:** -64% · **peor año:** -35% · **meses positivos:** 32%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
 
 ### 🟢 Tendencia BTC+ETH con volatilidad controlada (Moderada)
@@ -144,8 +144,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance / Kraken / Bybit
 - **Capital mínimo sugerido:** 300 USD · **Frecuencia:** Semanal
 - **Datos:** BTC, ETH desde 2017
-- **Periodo:** 2017-08-17 a 2026-10-21 (9.18 años)
-- **Rendimiento anual:** +21.2% · **caída máxima:** -25% · **peor año:** -16% · **meses positivos:** 39%
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
+- **Rendimiento anual:** +21.3% · **caída máxima:** -26% · **peor año:** -16% · **meses positivos:** 37%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
 
 ### 🔴 Carry de funding en altcoins (Moderada)
@@ -155,8 +155,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance / Bybit (perpetuos de altcoins)
 - **Capital mínimo sugerido:** 2000 USD · **Frecuencia:** Semanal
 - **Datos:** 20 altcoins + funding desde 2019
-- **Periodo:** 2019-09-10 a 2026-10-21 (7.11 años)
-- **Rendimiento anual:** +5.7% · **caída máxima:** -1% · **peor año:** -1% · **meses positivos:** 56%
+- **Periodo:** 2019-09-10 a 2026-10-22 (7.12 años)
+- **Rendimiento anual:** +5.8% · **caída máxima:** -2% · **peor año:** -1% · **meses positivos:** 53%
 - **Pruebas:** ✅ le gana al efectivo · ❌ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Sesgo de supervivencia en el universo; se ignora la diferencia de precio spot-perpetuo.
 
@@ -167,8 +167,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance / Kraken
 - **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Semanal
 - **Datos:** 20 monedas Binance desde 2017
-- **Periodo:** 2017-08-17 a 2026-10-21 (9.18 años)
-- **Rendimiento anual:** +78.3% · **caída máxima:** -72% · **peor año:** -45% · **meses positivos:** 34%
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
+- **Rendimiento anual:** +96.9% · **caída máxima:** -61% · **peor año:** -35% · **meses positivos:** 41%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Sesgo de supervivencia: el universo son monedas que hoy siguen listadas.
 
@@ -179,7 +179,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance / Bybit / Hyperliquid
 - **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Diaria
 - **Datos:** BTC, ETH + funding desde 2019
-- **Periodo:** 2019-09-10 a 2026-10-21 (7.11 años)
+- **Periodo:** 2019-09-10 a 2026-10-22 (7.12 años)
 - **Rendimiento anual:** +22.1% · **caída máxima:** -60% · **peor año:** -17% · **meses positivos:** 43%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ❌ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
 
@@ -190,8 +190,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance / Bybit / Hyperliquid
 - **Capital mínimo sugerido:** 300 USD · **Frecuencia:** Diaria
 - **Datos:** BTC perpetuo desde 2019
-- **Periodo:** 2019-09-10 a 2026-10-21 (7.11 años)
-- **Rendimiento anual:** +13.0% · **caída máxima:** -93% · **peor año:** -77% · **meses positivos:** 35%
+- **Periodo:** 2019-09-10 a 2026-10-22 (7.12 años)
+- **Rendimiento anual:** +10.9% · **caída máxima:** -93% · **peor año:** -78% · **meses positivos:** 35%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ❌ caída < 85% · ✅ 3+ años de historial
 
 ### 🔴 Scalper momentum (bot actual) (Agresiva)
@@ -201,7 +201,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance
 - **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Horaria
 - **Datos:** BTC/USDT 1h, últimos 2 años
-- **Periodo:** 2024-10-22 a 2026-10-22 (2.0 años)
+- **Periodo:** 2024-10-23 a 2026-10-22 (2.0 años)
 - **Rendimiento anual:** -33.4% · **caída máxima:** -56% · **peor año:** -34% · **meses positivos:** 4%
 - **Operaciones:** 268 · acierto 37% · promedio neto -0.301% (bruto -0.001%)
 - **Pruebas:** ❌ le gana al efectivo · ❌ fuera de muestra · ❌ doble costo · ✅ caída < 85% · ❌ 3+ años de historial · ✅ 30+ operaciones
@@ -213,7 +213,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance
 - **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Horaria
 - **Datos:** BTC/USDT 1h, últimos 2 años
-- **Periodo:** 2024-10-22 a 2026-10-22 (2.0 años)
+- **Periodo:** 2024-10-23 a 2026-10-22 (2.0 años)
 - **Rendimiento anual:** +0.0% · **caída máxima:** +0% · **peor año:** +0% · **meses positivos:** 0%
 - **Operaciones:** 0 (la estrategia no disparó en todo el periodo)
 - **Pruebas:** ❌ le gana al efectivo · ❌ fuera de muestra · ❌ doble costo · ✅ caída < 85% · ❌ 3+ años de historial · ❌ 30+ operaciones
@@ -225,20 +225,20 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance
 - **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Horaria
 - **Datos:** BTC/USDT 1h, últimos 2 años
-- **Periodo:** 2024-10-22 a 2026-10-22 (2.0 años)
+- **Periodo:** 2024-10-23 a 2026-10-22 (2.0 años)
 - **Rendimiento anual:** -19.3% · **caída máxima:** -36% · **peor año:** -23% · **meses positivos:** 24%
 - **Operaciones:** 165 · acierto 67% · promedio neto -0.257% (bruto +0.043%)
 - **Pruebas:** ❌ le gana al efectivo · ❌ fuera de muestra · ❌ doble costo · ✅ caída < 85% · ❌ 3+ años de historial · ✅ 30+ operaciones
 
-### 🟢 DCA semanal a BTC (Agresiva)
+### 🟡 DCA semanal a BTC (Agresiva)
 
 - **Cómo gana:** Compra BTC cada semana sin vender nunca.
 - **Riesgos:** Caídas de 75-80% (2018, 2022) a mitad del camino.
 - **Dónde se opera:** Bitso / Binance / Kraken / Wealthsimple
 - **Capital mínimo sugerido:** 20 USD · **Frecuencia:** Semanal
 - **Datos:** BTC/USDT desde 2017
-- **Periodo:** 2017-08-17 a 2026-10-21 (9.18 años)
-- **Resultado:** aportó 47,900, terminó con 264,182 (x5.52), TIR +35.7% anual
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
+- **Resultado:** aportó 47,900, terminó con 255,771 (x5.34), TIR +35.0% anual
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ caída < 85% · ✅ 3+ años de historial
 
 ### 🟡 Mundo emergente en partes iguales (Agresiva)
@@ -248,8 +248,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** IBKR (ETFs de país en EE.UU.): desde México y Canadá
 - **Capital mínimo sugerido:** 1000 USD · **Frecuencia:** Trimestral
 - **Datos:** 22 ETFs de país (Yahoo) desde 1996
-- **Periodo:** 1996-03-18 a 2026-10-21 (30.59 años)
-- **Rendimiento anual:** +7.0% · **caída máxima:** -69% · **peor año:** -45% · **meses positivos:** 58%
+- **Periodo:** 1996-03-18 a 2026-10-22 (30.6 años)
+- **Rendimiento anual:** +6.9% · **caída máxima:** -69% · **peor año:** -45% · **meses positivos:** 58%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.
 
@@ -260,8 +260,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** IBKR (ETFs de país en EE.UU.)
 - **Capital mínimo sugerido:** 2000 USD · **Frecuencia:** Mensual
 - **Datos:** 22 ETFs de país desde 1996
-- **Periodo:** 1996-03-18 a 2026-10-21 (30.59 años)
-- **Rendimiento anual:** +8.7% · **caída máxima:** -33% · **peor año:** -14% · **meses positivos:** 63%
+- **Periodo:** 1996-03-18 a 2026-10-22 (30.6 años)
+- **Rendimiento anual:** +8.6% · **caída máxima:** -33% · **peor año:** -14% · **meses positivos:** 63%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.
 
@@ -272,7 +272,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** IBKR (EWW, EWZ, ECH, EPU, ARGT)
 - **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Mensual
 - **Datos:** 5 ETFs de Latinoamérica desde 1996
-- **Periodo:** 1996-03-18 a 2026-10-21 (30.59 años)
+- **Periodo:** 1996-03-18 a 2026-10-22 (30.6 años)
 - **Rendimiento anual:** +10.1% · **caída máxima:** -53% · **peor año:** -23% · **meses positivos:** 66%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.
@@ -285,7 +285,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Capital mínimo sugerido:** 1000 USD · **Frecuencia:** Mensual
 - **Datos:** 33 ETFs de país desde 1996
 - **Periodo:** 1995-01-03 a 2026-10-22 (31.8 años)
-- **Rendimiento anual:** +9.0% · **caída máxima:** -55% · **peor año:** -24% · **meses positivos:** 65%
+- **Rendimiento anual:** +8.9% · **caída máxima:** -55% · **peor año:** -24% · **meses positivos:** 65%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Sesgo de supervivencia: el universo son ETFs que hoy siguen vivos; no incluye Rusia (ERUS), que quedó congelado en 2022, ni Colombia (GXG), cuyo ETF cerró.
 
@@ -336,8 +336,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Kraken / Binance (sólo spot)
 - **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Semanal
 - **Datos:** BTC, ETH + funding de BTC desde 2019
-- **Periodo:** 2019-09-10 a 2026-10-21 (7.11 años)
-- **Rendimiento anual:** +14.7% · **caída máxima:** -25% · **peor año:** -16% · **meses positivos:** 38%
+- **Periodo:** 2019-09-10 a 2026-10-22 (7.12 años)
+- **Rendimiento anual:** +14.6% · **caída máxima:** -26% · **peor año:** -16% · **meses positivos:** 37%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
 
 ### 🔴 Comprar la capitulación (inventada) (Agresiva)
@@ -347,7 +347,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Kraken / Binance (sólo spot)
 - **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Por evento
 - **Datos:** BTC + funding desde 2019
-- **Periodo:** 2019-09-10 a 2026-10-21 (7.11 años)
+- **Periodo:** 2019-09-10 a 2026-10-22 (7.12 años)
 - **Rendimiento anual:** +14.0% · **caída máxima:** -35% · **peor año:** -10% · **meses positivos:** 16%
 - **Pruebas:** ✅ le gana al efectivo · ❌ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
 
@@ -358,7 +358,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** IBKR (ETFs de país)
 - **Capital mínimo sugerido:** 1000 USD · **Frecuencia:** Mensual
 - **Datos:** 22 ETFs de país + USD/MXN desde 2003
-- **Periodo:** 2003-12-01 a 2026-10-21 (22.89 años)
+- **Periodo:** 2003-12-01 a 2026-10-22 (22.89 años)
 - **Rendimiento anual:** +2.2% · **caída máxima:** -45% · **peor año:** -23% · **meses positivos:** 62%
 - **Pruebas:** ✅ le gana al efectivo · ❌ fuera de muestra · ❌ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido · ❌ no fue suerte
 - **Ojo:** Sesgo de supervivencia en los ETFs de país (sin Rusia ni Colombia).
@@ -382,7 +382,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Capital mínimo sugerido:** 1000 USD · **Frecuencia:** Mensual
 - **Datos:** 33 ETFs + monedas desde 2003
 - **Periodo:** 1995-01-03 a 2026-10-22 (31.8 años)
-- **Rendimiento anual:** +9.0% · **caída máxima:** -49% · **peor año:** -24% · **meses positivos:** 65%
+- **Rendimiento anual:** +8.9% · **caída máxima:** -49% · **peor año:** -24% · **meses positivos:** 65%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido · ❌ no fue suerte
 - **Ojo:** Sesgo de supervivencia en los ETFs de país (sin Rusia ni Colombia).
 
@@ -393,8 +393,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Kraken / Binance (sólo spot)
 - **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Semanal
 - **Datos:** BTC, ETH desde 2017
-- **Periodo:** 2017-08-17 a 2026-10-21 (9.18 años)
-- **Rendimiento anual:** +41.3% · **caída máxima:** -71% · **peor año:** -42% · **meses positivos:** 37%
+- **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
+- **Rendimiento anual:** +39.2% · **caída máxima:** -77% · **peor año:** -50% · **meses positivos:** 39%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
 
 ### 🔴 Carry de oro tokenizado (inventada) (Conservadora)
@@ -404,12 +404,12 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Dónde se opera:** Binance (spot y perpetuo en la misma cuenta; no disponible en Canadá)
 - **Capital mínimo sugerido:** 1000 USD · **Frecuencia:** Semanal
 - **Datos:** PAXG spot + funding del perpetuo desde 2025
-- **Periodo:** 2025-03-27 a 2026-10-21 (1.57 años)
+- **Periodo:** 2025-03-27 a 2026-10-22 (1.57 años)
 - **Rendimiento anual:** +0.2% · **caída máxima:** -1% · **peor año:** +0% · **meses positivos:** 50%
 - **Pruebas:** ❌ le gana al efectivo · ❌ fuera de muestra · ❌ doble costo · ❌ ejecutar tarde · ❌ parámetros vecinos · ✅ caída < 85% · ❌ 3+ años de historial · ❌ no fue suerte
 - **Ojo:** Historial corto: el perpetuo de PAXG existe desde marzo de 2025.
 
-### 🟡 Freno por crédito (inventada) (Moderada)
+### 🔴 Freno por crédito (inventada) (Moderada)
 
 - **Cómo gana:** El portafolio chico, pero en efectivo cuando los bonos de alto riesgo sufren contra los del Tesoro: el crédito suele asustarse antes que las acciones.
 - **Riesgos:** Señales falsas en sustos de crédito que no pasan a más.
@@ -417,8 +417,8 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Capital mínimo sugerido:** 200 USD · **Frecuencia:** Diaria
 - **Datos:** Portafolio chico + HYG/IEF desde 2017
 - **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
-- **Rendimiento anual:** +14.0% · **caída máxima:** -24% · **peor año:** -21% · **meses positivos:** 58%
-- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
+- **Rendimiento anual:** +14.3% · **caída máxima:** -25% · **peor año:** -21% · **meses positivos:** 58%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido · ❌ no fue suerte
 - **Ojo:** Las piezas se eligieron por haber salido verdes: el resultado combinado hereda ese optimismo.
 
 ### 🟡 Freno por curva invertida (inventada) (Moderada)
@@ -440,7 +440,7 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Diaria
 - **Datos:** Tendencia BTC+ETH + stablecoins (DefiLlama) desde 2018
 - **Periodo:** 2017-11-29 a 2026-10-22 (8.9 años)
-- **Rendimiento anual:** +17.2% · **caída máxima:** -23% · **peor año:** -8% · **meses positivos:** 33%
+- **Rendimiento anual:** +17.7% · **caída máxima:** -23% · **peor año:** -8% · **meses positivos:** 32%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
 
 ### 🔴 Freno por pánico en opciones (inventada) (Moderada)
@@ -451,10 +451,10 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Diaria
 - **Datos:** Tendencia BTC+ETH + DVOL (Deribit) desde 2021
 - **Periodo:** 2021-03-24 a 2026-10-22 (5.58 años)
-- **Rendimiento anual:** +6.5% · **caída máxima:** -20% · **peor año:** -16% · **meses positivos:** 28%
+- **Rendimiento anual:** +6.7% · **caída máxima:** -21% · **peor año:** -16% · **meses positivos:** 26%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ❌ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
 
-### 🟢 Portafolio de las 7 verdes (Moderada)
+### 🟡 Portafolio de las 7 verdes (Moderada)
 
 - **Cómo gana:** Junta las 7 estrategias verdes que el bot puede operar, cada una con más o menos capital según su riesgo, y rebalancea cada mes: no depende de que un solo mercado vaya bien.
 - **Riesgos:** Si todos los mercados caen a la vez (2022) caen juntas; más piezas = más órdenes y más comisiones.
@@ -463,10 +463,10 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Datos:** Las 7 estrategias del catálogo, desde 2017
 - **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
 - **Rendimiento anual:** +11.0% · **caída máxima:** -15% · **peor año:** -9% · **meses positivos:** 69%
-- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Las piezas se eligieron por haber salido verdes: el resultado combinado hereda ese optimismo.
 
-### 🟢 Portafolio chico: cripto + S&P 500 (Moderada)
+### 🟡 Portafolio chico: cripto + S&P 500 (Moderada)
 
 - **Cómo gana:** Dos piezas que casi no se parecen: la tendencia BTC+ETH con volatilidad controlada y la tendencia del S&P 500, con capital según su riesgo. Pensado para empezar con poco.
 - **Riesgos:** Las dos pueden caer juntas en un pánico general; con 200 dólares la comisión mínima de IBKR pesa.
@@ -474,6 +474,6 @@ Semáforo: 🟢 pasa las 5 pruebas · 🟡 pasa casi todas · 🔴 no sirve como
 - **Capital mínimo sugerido:** 200 USD · **Frecuencia:** Mensual
 - **Datos:** Tendencia BTC+ETH y Faber, desde 2017
 - **Periodo:** 2017-08-17 a 2026-10-22 (9.18 años)
-- **Rendimiento anual:** +15.2% · **caída máxima:** -22% · **peor año:** -20% · **meses positivos:** 63%
-- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
+- **Rendimiento anual:** +15.6% · **caída máxima:** -23% · **peor año:** -20% · **meses positivos:** 63%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Las piezas se eligieron por haber salido verdes: el resultado combinado hereda ese optimismo.
