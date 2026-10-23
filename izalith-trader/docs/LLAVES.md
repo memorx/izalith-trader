@@ -5,6 +5,28 @@ ni en capturas de pantalla, ni en chats. Si alguna se expone, se borra y se crea
 
 Los nombres de los botones pueden cambiar un poco según la versión de cada sitio.
 
+## Papel o real: un interruptor por mercado
+
+Cada mercado tiene su propio interruptor, así prender uno no prende los demás:
+
+```
+DRY_RUN=true            # el valor por defecto de los tres de abajo
+CRYPTO_DRY_RUN=         # vacío = lo que diga DRY_RUN
+STOCKS_DRY_RUN=
+FOREX_DRY_RUN=
+```
+
+`true` = el bot simula las órdenes por dentro (papel). `false` = las manda al broker. Para que
+el bot opere de verdad en cualquier mercado hacen falta además dos líneas:
+
+```
+LIVE_CONFIRMED=true     # la segunda llave: sin ella el bot no arranca en real
+REAL_CAPITAL_USD=200    # el dinero real que maneja el bot; el freno de emergencia se mide contra esto
+```
+
+Cada vez que arranca con algo en real, el bot avisa por Telegram. La historia en real se guarda
+en `data/izalith_real.db`, aparte de la de papel (`data/izalith.db`).
+
 ## Kraken Pro (cripto)
 
 1. Activa la verificación en dos pasos de la cuenta antes de crear la llave.
@@ -26,11 +48,14 @@ Los nombres de los botones pueden cambiar un poco según la versión de cada sit
    CRYPTO_EXCHANGE=kraken
    CRYPTO_API_KEY=...
    CRYPTO_SECRET=...
-   BINANCE_TESTNET=false
-   DRY_RUN=true
+   CRYPTO_TESTNET=false
+   CRYPTO_DRY_RUN=true
    ```
 
-   Deja `DRY_RUN=true` las primeras semanas: el bot lee tu cuenta real pero sigue operando en papel.
+   Deja `CRYPTO_DRY_RUN=true` las primeras semanas: el bot lee tu cuenta real pero sigue operando
+   en papel. Kraken no tiene cuenta de prueba (testnet): por eso `CRYPTO_TESTNET=false`.
+   En Kraken el bot opera contra **USD** (BTC/USD, ETH/USD), así que deposita o convierte a USD;
+   si prefieres otra moneda, cámbiala con `CRYPTO_QUOTE`.
 
 ## Interactive Brokers (acciones y ETFs)
 
@@ -48,12 +73,16 @@ Los nombres de los botones pueden cambiar un poco según la versión de cada sit
    ```
    STOCKS_BROKER=ibkr
    IBKR_PORT=4002
-   DRY_RUN=false
+   STOCKS_DRY_RUN=false
    ```
 
-   Con el puerto de papel y `DRY_RUN=false`, las órdenes van al motor de papel de IBKR: es la
-   práctica más realista antes del dinero real.
-5. Para pasar a real: entra a IB Gateway con el usuario real, cambia a `IBKR_PORT=4001`.
+   Con el puerto de papel y `STOCKS_DRY_RUN=false`, las órdenes van al motor de papel de IBKR: es
+   la práctica más realista antes del dinero real. Usa `STOCKS_DRY_RUN`, **no** `DRY_RUN=false`:
+   con `DRY_RUN=false` también se prendería en real cualquier otro mercado que tenga llaves
+   (por ejemplo Kraken). Como el bot manda órdenes a IBKR, también pide `LIVE_CONFIRMED=true` y
+   `REAL_CAPITAL_USD` (pon lo que tenga la cuenta de papel).
+5. Para pasar a real: entra a IB Gateway con el usuario real, cambia a `IBKR_PORT=4001` y pon en
+   `REAL_CAPITAL_USD` lo que de verdad depositaste.
 
 ## Telegram (resumen diario y alertas)
 
@@ -88,7 +117,9 @@ Los nombres de los botones pueden cambiar un poco según la versión de cada sit
 ## Si algo sale mal
 
 - **Se expuso una llave:** bórrala en el exchange en ese momento y crea otra.
-- **El bot hace algo raro:** ciérralo (Ctrl+C, o doble clic en `tools\detener.bat` si arrancó solo).
-  Las posiciones quedan en el exchange; nada se pierde por cerrar el bot.
+- **El bot hace algo raro:** ciérralo (Ctrl+C, o doble clic en `tools\detener.bat` si arrancó solo:
+  le pide que se apague en orden y sólo lo fuerza si en un minuto no lo hizo).
+  Las posiciones quedan en el exchange; nada se pierde por cerrar el bot. Si una orden quedó a
+  medias, al volver a arrancar el bot la revisa, cancela lo que siga vivo y anota lo que se llenó.
 - **Se activó el freno de emergencia:** revisa qué pasó en el panel y quítalo con
   `python -m tools.freno --quitar`.
