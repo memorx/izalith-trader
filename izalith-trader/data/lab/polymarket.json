@@ -1,0 +1,133 @@
+{
+ "calibracion": [
+  {
+   "tramo": "0-5¢",
+   "n": 355,
+   "precio": 0.010883098591549293,
+   "real": 0.011267605633802818,
+   "diferencia": 0.00038450704225352454
+  },
+  {
+   "tramo": "5-10¢",
+   "n": 68,
+   "precio": 0.07091911764705883,
+   "real": 0.11764705882352941,
+   "diferencia": 0.04672794117647058
+  },
+  {
+   "tramo": "10-20¢",
+   "n": 90,
+   "precio": 0.1476444444444444,
+   "real": 0.2222222222222222,
+   "diferencia": 0.0745777777777778
+  },
+  {
+   "tramo": "20-30¢",
+   "n": 81,
+   "precio": 0.25143209876543215,
+   "real": 0.4691358024691358,
+   "diferencia": 0.21770370370370362
+  },
+  {
+   "tramo": "30-40¢",
+   "n": 75,
+   "precio": 0.3477333333333334,
+   "real": 0.38666666666666666,
+   "diferencia": 0.038933333333333264
+  },
+  {
+   "tramo": "40-50¢",
+   "n": 118,
+   "precio": 0.45209745762711867,
+   "real": 0.5423728813559322,
+   "diferencia": 0.09027542372881353
+  },
+  {
+   "tramo": "50-60¢",
+   "n": 110,
+   "precio": 0.5297454545454547,
+   "real": 0.4727272727272727,
+   "diferencia": -0.05701818181818202
+  },
+  {
+   "tramo": "60-70¢",
+   "n": 42,
+   "precio": 0.6538928571428573,
+   "real": 0.6190476190476191,
+   "diferencia": -0.03484523809523821
+  },
+  {
+   "tramo": "70-80¢",
+   "n": 34,
+   "precio": 0.7455882352941174,
+   "real": 0.5882352941176471,
+   "diferencia": -0.15735294117647036
+  },
+  {
+   "tramo": "80-90¢",
+   "n": 24,
+   "precio": 0.8470416666666666,
+   "real": 0.9166666666666666,
+   "diferencia": 0.06962500000000005
+  },
+  {
+   "tramo": "90-95¢",
+   "n": 6,
+   "precio": 0.9314166666666667,
+   "real": 1.0,
+   "diferencia": 0.06858333333333333
+  },
+  {
+   "tramo": "95-100¢",
+   "n": 30,
+   "precio": 0.9796333333333335,
+   "real": 1.0,
+   "diferencia": 0.020366666666666533
+  }
+ ],
+ "favoritos": {
+  "apuestas": 166,
+  "ganadas": 156,
+  "esperadas_por_precio": 157.56949999999995,
+  "z_victorias": -0.5575748365304409,
+  "rend_promedio": -0.01823169524789832,
+  "rend_desv": 0.25030557612805576,
+  "z_rendimiento": -0.9384487759446217,
+  "peor_racha_perdidas": 1
+ },
+ "favoritos_primera_mitad": {
+  "apuestas": 104,
+  "ganadas": 98,
+  "esperadas_por_precio": 99.23899999999999,
+  "z_victorias": -0.5839280645159168,
+  "rend_promedio": -0.020403739983113085,
+  "rend_desv": 0.24438756272300668,
+  "z_rendimiento": -0.8514268661215522,
+  "peor_racha_perdidas": 1
+ },
+ "favoritos_segunda_mitad": {
+  "apuestas": 62,
+  "ganadas": 58,
+  "esperadas_por_precio": 58.3305,
+  "z_victorias": -0.17868009989736558,
+  "rend_promedio": -0.014588265369473552,
+  "rend_desv": 0.26191939195903524,
+  "z_rendimiento": -0.4385628552672197,
+  "peor_racha_perdidas": 1
+ },
+ "mitad_desde": "2026-01-29",
+ "generado": "2026-10-23 05:34 UTC",
+ "reglas": {
+  "volumen_minimo": 100000,
+  "desde": "2024-01-01",
+  "dias_antes_del_cierre": 7,
+  "favorito_entre": [
+   0.9,
+   0.98
+  ],
+  "tasa_comision": 0.05,
+  "spread": 0.005
+ },
+ "mercados_con_foto": 1033,
+ "nota": "Conclusión: no hay ventaja aprovechable con este diseño; los favoritos ganan casi exactamente lo que dice su precio y los costos dejan la apuesta en negativo. La primera versión del estudio (los 2,000 mercados con más volumen) parecía mostrar que los 'sí' baratos ganaban el triple: era sesgo de selección, porque las sorpresas generan volumen. Por eso ahora la muestra es al azar."
+}
