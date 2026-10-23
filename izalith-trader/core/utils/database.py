@@ -165,6 +165,15 @@ class Database:
                 updated_at TEXT NOT NULL
             );
 
+            -- Valor de cada estrategia del allocator en el tiempo (para compararla con su backtest)
+            CREATE TABLE IF NOT EXISTS sleeve_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                module TEXT NOT NULL,
+                equity REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sleeve_module ON sleeve_snapshots(module, timestamp);
+
             CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp);
             CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
             CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status);
@@ -543,6 +552,16 @@ class Database:
             (utcnow_iso(), total_value_usd, cash_usd, positions_value_usd, unrealized_pnl, realized_pnl_today))
         await self._conn.commit()
         return cursor.lastrowid
+
+    async def insert_sleeve_snapshot(self, module: str, equity: float) -> None:
+        await self._conn.execute("INSERT INTO sleeve_snapshots (timestamp, module, equity) VALUES (?, ?, ?)",
+                                 (utcnow_iso(), module, equity))
+        await self._conn.commit()
+
+    async def get_sleeve_snapshots(self, module: str) -> List[Dict[str, Any]]:
+        cursor = await self._conn.execute(
+            "SELECT timestamp, equity FROM sleeve_snapshots WHERE module = ? ORDER BY timestamp", (module,))
+        return [dict(row) for row in await cursor.fetchall()]
 
     async def get_portfolio_snapshots(self, hours: int = 24) -> List[Dict[str, Any]]:
         since = (datetime.now(timezone.utc) - timedelta(hours=hours)).replace(tzinfo=None).isoformat()
