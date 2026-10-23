@@ -28,13 +28,16 @@ from core.adapters.forex import ForexAdapter
 from core.adapters.stocks import StocksAdapter
 from core.data.feed import UnifiedFeed
 from core.execution import reconcile_pending
+from core.adapters.base import BaseAdapter
 from core.risk_guard import RiskGuard, set_guard
 from core.portfolio.tracker import PortfolioTracker
 
 logger = get_logger("main")
 
 SNAPSHOT_SECONDS = 300
+RECONCILE_MIN_AGE_S = 1800   # órdenes a medias sin moverse en 30 min: ya nadie las está esperando
 LOCK_PORT = 47651   # candado: sólo una copia del bot puede tener este puerto
+STOP_FILE = Path(__file__).parent / "data" / "STOP"   # tools/detener.bat lo crea para un apagado limpio
 
 
 def acquire_single_instance_lock(port: int = LOCK_PORT):
@@ -68,38 +71,75 @@ class IzalithSystem:
         self.portfolio: Optional[PortfolioTracker] = None
         self.db = None
         self.instances: Dict[str, object] = {}     # módulo -> objeto (para el dashboard)
-        self.unrecorded_orders: List[Dict] = []
+        self.unrecorded_orders: List[Dict] = []     # órdenes que necesitan atención (ver core/execution.py)
+        self.capital_warnings: List[str] = []
         self.module_errors: Dict[str, str] = {}
         self.guard: Optional[RiskGuard] = None
         self._tasks: List[asyncio.Task] = []
         self._running = False
         self._stopped = False
 
+    @property
+    def mode_label(self) -> str:
+        live = self.settings.live_markets
+        names = {"crypto": "cripto", "stock": "acciones", "forex": "forex"}
+        return "PAPEL" if not live else "DINERO REAL en " + ", ".join(names[m] for m in live)
+
+    def _live_gate(self) -> Optional[str]:
+        """Las dos llaves para operar en real. Regresa el motivo si falta alguna."""
+        s = self.settings
+        if s.all_paper:
+            return None
+        if not s.live_confirmed:
+            return (f"El .env pide operar en real ({', '.join(s.live_markets)}) pero falta LIVE_CONFIRMED=true. "
+                    f"Es la segunda llave: así un arranque automático nunca pone dinero real sin que lo hayas decidido.")
+        if s.real_capital_usd <= 0:
+            return ("Falta REAL_CAPITAL_USD: el dinero real (en USD) que va a manejar el bot. "
+                    "El freno de emergencia y el efectivo se miden contra ese número.")
+        return None
+
+    def _market_of(self, symbol: str) -> str:
+        try:
+            return get_asset(symbol).market.value
+        except ValueError:
+            a = self.feed._get_adapter_for_symbol(symbol) if self.feed else None
+            return a.market if a else "crypto"
+
     async def initialize(self) -> bool:
         setup_logging(level=self.settings.log_level, log_dir=self.settings.logs_dir, log_to_file=True)
         log_startup_banner()
-        mode = "PAPEL (DRY_RUN)" if self.settings.dry_run else "DINERO REAL"
-        logger.info(f"Modo: {mode} · módulos: {', '.join(self.modules)} · zona: {self.settings.trading_timezone}")
+        s = self.settings
+        logger.info(f"Modo: {self.mode_label} · módulos: {', '.join(self.modules)} · zona: {s.trading_timezone}")
+        blocked = self._live_gate()
+        if blocked:
+            logger.error(blocked)
+            return False
 
+        # Papel y real nunca en la misma base: la historia de práctica no se mezcla con dinero de verdad
+        db_path = s.data_dir / ("izalith.db" if s.all_paper else "izalith_real.db")
         try:
-            self.db = await get_database(self.settings.data_dir / "izalith.db", self.settings.trading_timezone)
-            log_module_status("Database", "OK", str(self.settings.data_dir / "izalith.db"))
+            self.db = await get_database(db_path, s.trading_timezone)
+            log_module_status("Database", "OK", str(db_path))
         except Exception as e:
             log_module_status("Database", "ERROR", str(e))
             return False
 
         await self._init_adapters()
         self.feed = UnifiedFeed(self.adapters)
-        self.portfolio = PortfolioTracker(self.db, self.feed, initial_cash=self.settings.paper_cash_usd)
+        initial = s.paper_cash_usd if s.all_paper else s.real_capital_usd
+        self.portfolio = PortfolioTracker(self.db, self.feed, initial_cash=initial)
         await self.portfolio.load()
+        for adapter in self.adapters.values():
+            # En papel, el saldo y las tenencias salen del portafolio: sobreviven a un reinicio
+            adapter.paper_cash_provider = self.portfolio.get_cash_usd
+            adapter.paper_holdings_provider = self.portfolio.held_quantity
+        if not s.all_paper:
+            await self._check_live_capital()
+            if any(a.is_paper for a in self.adapters.values() if a.connected or a.is_simulating):
+                logger.warning("Hay mercados en papel junto con mercados en real: comparten la cuenta de efectivo "
+                               "del bot. Para medir bien, opera todo en real o todo en papel.")
 
-        def market_of(symbol: str) -> str:
-            try:
-                return get_asset(symbol).market.value
-            except ValueError:
-                a = self.feed._get_adapter_for_symbol(symbol)
-                return a.market if a else "crypto"
-        self.unrecorded_orders = await reconcile_pending(self.db, self.adapters, market_of)
+        self.unrecorded_orders = await reconcile_pending(self.db, self.adapters, self._market_of)
 
         self.guard = RiskGuard(self.db, self.settings.max_drawdown_pct)
         await self.guard.load()
@@ -107,21 +147,46 @@ class IzalithSystem:
         set_guard(self.guard)
         return True
 
+    async def _check_live_capital(self) -> None:
+        """¿Hay en las cuentas reales al menos lo que dice REAL_CAPITAL_USD? Si no, el freno mide mal."""
+        s = self.settings
+        cash, failed = 0.0, []
+        for market in s.live_markets:
+            adapter = self.adapters.get(market)
+            try:
+                bal = await adapter.get_balance()
+                cash += sum(v for k, v in bal.items() if k in ("USD", "USDT", "USDC"))
+            except Exception as e:
+                failed.append(f"{market} ({e})")
+        held = sum(p.value for p in self.portfolio.positions.values() if p.market in s.live_markets)
+        if failed:
+            self.capital_warnings.append("No se pudo leer el saldo real de " + ", ".join(failed))
+        elif cash + held < s.real_capital_usd * 0.98:
+            self.capital_warnings.append(
+                f"En las cuentas hay {cash + held:,.2f} USD (efectivo + posiciones del bot) y REAL_CAPITAL_USD dice "
+                f"{s.real_capital_usd:,.2f}: baja REAL_CAPITAL_USD o deposita la diferencia")
+        for w in self.capital_warnings:
+            logger.error(w)
+
     async def _init_adapters(self):
         s = self.settings
-        # Con dinero real nunca se permiten precios inventados
-        allow_sim = s.allow_simulation and s.dry_run
-        common = dict(dry_run=s.dry_run, allow_simulation=allow_sim)
+        # Con dinero real en cualquier mercado nunca se permiten precios inventados
+        allow_sim = s.allow_simulation and s.all_paper
+
+        def common(market: str) -> dict:
+            return dict(dry_run=s.market_dry_run(market), allow_simulation=allow_sim)
         self.adapters["crypto"] = CryptoAdapter(api_key=s.binance_api_key, secret=s.binance_secret,
-                                                testnet=s.binance_testnet, exchange_id=s.crypto_exchange, **common)
+                                                testnet=s.binance_testnet, exchange_id=s.crypto_exchange,
+                                                quote=s.crypto_quote, **common("crypto"))
         self.adapters["forex"] = ForexAdapter(account_id=s.oanda_account_id, api_key=s.oanda_api_key,
-                                              practice=s.oanda_practice, **common)
+                                              practice=s.oanda_practice, **common("forex"))
         if s.stocks_broker == "ibkr":
             from core.adapters.ibkr import IBKRAdapter
-            self.adapters["stock"] = IBKRAdapter(host=s.ibkr_host, port=s.ibkr_port, client_id=s.ibkr_client_id, **common)
+            self.adapters["stock"] = IBKRAdapter(host=s.ibkr_host, port=s.ibkr_port, client_id=s.ibkr_client_id,
+                                                 **common("stock"))
         else:
             self.adapters["stock"] = StocksAdapter(api_key=s.alpaca_api_key, secret_key=s.alpaca_secret_key,
-                                                   paper=s.alpaca_paper, **common)
+                                                   paper=s.alpaca_paper, **common("stock"))
         names = {"crypto": s.crypto_exchange.capitalize(), "forex": "OANDA",
                  "stock": "IBKR" if s.stocks_broker == "ibkr" else "Alpaca" if s.alpaca_api_key else "Yahoo (sólo papel)"}
         for market, adapter in self.adapters.items():
@@ -134,7 +199,9 @@ class IzalithSystem:
     def _module_config(self) -> dict:
         s = self.settings
         return {
-            "dry_run": s.dry_run,
+            "dry_run": s.all_paper,            # con cualquier mercado en real, nunca se opera sobre precios inventados
+            "live_markets": s.live_markets,
+            "real_capital_usd": s.real_capital_usd,
             "trading_timezone": s.trading_timezone,
             "signal_types": s.signal_types,
             "telegram_bot_token": s.telegram_bot_token,
@@ -204,6 +271,7 @@ class IzalithSystem:
 
         snap = asyncio.create_task(self._snapshots(), name="snapshots")
         self._tasks.append(snap)
+        self._tasks.append(asyncio.create_task(self._watch_stop_file(), name="stop-file"))
         logger.info(f"System running with {len(self._tasks)} tasks. Press Ctrl+C to stop")
         await asyncio.gather(*self._tasks, return_exceptions=True)
 
@@ -215,7 +283,26 @@ class IzalithSystem:
                     await self.guard.update(self.portfolio.get_total_value_usd())
             except Exception as e:
                 logger.warning(f"Snapshot falló: {e}")
+            try:
+                # Órdenes que quedaron a medias por una excepción o una red caída, sin esperar al reinicio
+                self.unrecorded_orders = await reconcile_pending(self.db, self.adapters, self._market_of,
+                                                                 min_age_s=RECONCILE_MIN_AGE_S)
+            except Exception as e:
+                logger.warning(f"Reconciliación falló: {e}")
             await asyncio.sleep(SNAPSHOT_SECONDS)
+
+    async def _watch_stop_file(self):
+        """tools/detener.bat crea data/STOP: se apaga en orden (sin cortar una orden a medias a la fuerza)."""
+        while self._running:
+            if STOP_FILE.exists():
+                try:
+                    STOP_FILE.unlink()
+                except OSError:
+                    pass
+                logger.info("Se pidió detener el bot (data/STOP)")
+                asyncio.create_task(self.stop())
+                return
+            await asyncio.sleep(2)
 
     async def _start_module(self, name: str, config: dict):
         if name == "signals":
@@ -231,6 +318,11 @@ class IzalithSystem:
             bot = ScalperExecutor(self.adapters, self.feed, self.portfolio, self.db, config)
         elif name == "allocator":
             from modules.allocator.bot import AllocatorBot
+            s = self.settings
+            total = s.allocator_capital_usd * len(s.allocator_strategies)
+            if not s.all_paper and total > s.real_capital_usd + 1e-6:
+                raise ValueError(f"El allocator pide {total:,.2f} USD ({len(s.allocator_strategies)} estrategias x "
+                                 f"{s.allocator_capital_usd:,.2f}) y REAL_CAPITAL_USD es {s.real_capital_usd:,.2f}")
             bot = AllocatorBot(self.adapters, self.feed, self.portfolio, self.db, config)
         elif name == "collectors":
             from modules.collectors.bot import CollectorsBot
@@ -351,6 +443,8 @@ async def main():
               "(o deténla con tools/detener.bat).")
         return
     system = IzalithSystem(modules)
+    if STOP_FILE.exists():
+        STOP_FILE.unlink()   # una petición de alto vieja no debe apagar el bot recién arrancado
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

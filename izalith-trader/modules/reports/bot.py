@@ -53,7 +53,7 @@ class ReportsBot:
             if snap["timestamp"] <= cutoff:
                 day_ago = snap["total_value_usd"]
         total = summary["total_value_usd"]
-        modo = "PAPEL" if s.settings.dry_run else "DINERO REAL"
+        modo = s.mode_label if hasattr(s, "mode_label") else ("PAPEL" if s.settings.dry_run else "DINERO REAL")
         lines = [f"Izalith ({modo}) - {datetime.now(self.tz):%d/%m/%Y %H:%M}",
                  f"Valor: {_fmt_money(total)}"]
         if day_ago:
@@ -89,13 +89,16 @@ class ReportsBot:
         for name, err in s.module_errors.items():
             out[f"modulo:{name}"] = f"El módulo {name} se detuvo: {err}"
         for o in s.unrecorded_orders:
-            out[f"orden:{o['client_order_id']}"] = (f"La orden {o['side']} {o['symbol']} se llenó en el exchange y no quedó "
-                                                    f"registrada. Revísala a mano.")
+            out[f"orden:{o['client_order_id']}:{o.get('status', '')}"] = (
+                f"La orden {o['side']} {o['symbol']} ({o.get('module', '')}) "
+                f"{o.get('problema') or 'se llenó en el exchange y no quedó registrada. Revísala a mano.'}")
+        for i, w in enumerate(getattr(s, "capital_warnings", []) or []):
+            out[f"capital:{i}"] = w
         for market, st in (s.feed.get_market_status() if s.feed else {}).items():
             err = st.get("last_error") or ""
             if err.startswith("sin llaves"):
                 continue
-            if st.get("simulating") and not s.settings.dry_run:
+            if st.get("simulating") and market in getattr(s.settings, "live_markets", []):
                 out[f"sim:{market}"] = f"{st.get('name', market)}: precios simulados con dinero real"
             elif not st.get("connected") and not st.get("simulating"):
                 out[f"caida:{market}"] = f"{st.get('name', market)}: sin conexión ({err[:80]})"
@@ -138,6 +141,11 @@ class ReportsBot:
 
     async def run(self) -> None:
         self._running = True
+        live = getattr(self.system.settings, "live_markets", [])
+        if live:
+            # Cada arranque con dinero real se avisa: si fue un arranque automático que no esperabas, lo sabes
+            await self.send(f"Izalith arrancó con {self.system.mode_label}. Capital real: "
+                            f"{_fmt_money(self.system.settings.real_capital_usd)}")
         logger.info(f"Reportes: resumen diario a las {self.report_hour}:00 ({self.tz.key}); "
                     f"Telegram {'sí' if self.telegram.enabled else 'no configurado'}; "
                     f"healthcheck {'sí' if self.healthcheck_url else 'no configurado'}")

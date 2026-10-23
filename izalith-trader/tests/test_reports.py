@@ -55,7 +55,7 @@ async def test_alert_is_sent_once_until_resolved(system):
 async def test_unrecorded_order_is_a_problem(system):
     system.unrecorded_orders.append({"client_order_id": "iz1", "side": "buy", "symbol": "BTC/USDT"})
     problems = ReportsBot(system, {}).current_problems()
-    assert "orden:iz1" in problems
+    assert any(k.startswith("orden:iz1") for k in problems)
 
 
 def test_missing_keys_is_not_an_alert():

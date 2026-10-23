@@ -13,7 +13,12 @@ class Settings:
     """Main configuration settings for the trading system."""
 
     # General
-    dry_run: bool = True
+    dry_run: bool = True                             # valor por defecto de los tres de abajo
+    crypto_dry_run: Optional[bool] = None            # None = lo que diga DRY_RUN
+    stocks_dry_run: Optional[bool] = None
+    forex_dry_run: Optional[bool] = None
+    real_capital_usd: float = 0.0                    # dinero real que maneja el bot (obligatorio en real)
+    live_confirmed: bool = False                     # segunda llave para operar en real
     log_level: str = "INFO"
     active_modules: List[str] = field(default_factory=lambda: ["signals", "dashboard"])
     trading_timezone: str = "America/Mexico_City"   # define el "día" de los límites diarios
@@ -23,9 +28,10 @@ class Settings:
 
     # Crypto (ccxt; binance por defecto, kraken desde Canadá, bitso en pesos)
     crypto_exchange: str = "binance"
+    crypto_quote: str = ""                       # moneda contra la que se opera; vacío = USD en Kraken, USDT en Binance
     binance_api_key: str = ""
     binance_secret: str = ""
-    binance_testnet: bool = True
+    binance_testnet: bool = True                 # CRYPTO_TESTNET (sólo Binance tiene testnet)
 
     # Forex (OANDA)
     oanda_account_id: str = ""
@@ -123,6 +129,10 @@ class Settings:
                 return False
             return default
 
+        def get_opt_bool(key: str) -> Optional[bool]:
+            val = os.getenv(key, "").lower()
+            return True if val in ("true", "1", "yes") else False if val in ("false", "0", "no") else None
+
         def get_float(key: str, default: float) -> float:
             try:
                 return float(os.getenv(key, default))
@@ -138,6 +148,11 @@ class Settings:
         return cls(
             # General
             dry_run=get_bool("DRY_RUN", True),
+            crypto_dry_run=get_opt_bool("CRYPTO_DRY_RUN"),
+            stocks_dry_run=get_opt_bool("STOCKS_DRY_RUN"),
+            forex_dry_run=get_opt_bool("FOREX_DRY_RUN"),
+            real_capital_usd=get_float("REAL_CAPITAL_USD", 0.0),
+            live_confirmed=get_bool("LIVE_CONFIRMED", False),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             active_modules=get_list("ACTIVE_MODULES", ["signals", "dashboard"]),
             trading_timezone=os.getenv("TRADING_TIMEZONE", "America/Mexico_City"),
@@ -147,9 +162,10 @@ class Settings:
 
             # Crypto
             crypto_exchange=os.getenv("CRYPTO_EXCHANGE", "binance").strip().lower(),
+            crypto_quote=os.getenv("CRYPTO_QUOTE", "").strip().upper(),
             binance_api_key=os.getenv("BINANCE_API_KEY", os.getenv("CRYPTO_API_KEY", "")),
             binance_secret=os.getenv("BINANCE_SECRET", os.getenv("CRYPTO_SECRET", "")),
-            binance_testnet=get_bool("BINANCE_TESTNET", True),
+            binance_testnet=get_bool("CRYPTO_TESTNET", get_bool("BINANCE_TESTNET", True)),
 
             # Forex
             oanda_account_id=os.getenv("OANDA_ACCOUNT_ID", ""),
@@ -214,6 +230,25 @@ class Settings:
             dashboard_host=os.getenv("DASHBOARD_HOST", "127.0.0.1"),
             dashboard_token=os.getenv("DASHBOARD_TOKEN", ""),
         )
+
+    def market_dry_run(self, market: str) -> bool:
+        """¿Ese mercado se opera en papel dentro del bot? market: crypto, stock o forex."""
+        own = {"crypto": self.crypto_dry_run, "stock": self.stocks_dry_run, "forex": self.forex_dry_run}.get(market)
+        return self.dry_run if own is None else own
+
+    @property
+    def live_markets(self) -> List[str]:
+        """Mercados donde el bot manda órdenes de verdad a un broker (y tiene con qué conectarse)."""
+        creds = {
+            "crypto": bool(self.binance_api_key),
+            "stock": self.stocks_broker == "ibkr" or bool(self.alpaca_api_key),
+            "forex": bool(self.oanda_api_key),
+        }
+        return [m for m in ("crypto", "stock", "forex") if not self.market_dry_run(m) and creds[m]]
+
+    @property
+    def all_paper(self) -> bool:
+        return not self.live_markets
 
     def is_module_active(self, module: str) -> bool:
         """Check if a module is active."""

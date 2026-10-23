@@ -5,7 +5,8 @@ Seguridad:
 - Por defecto escucha sólo en 127.0.0.1 (DASHBOARD_HOST). Abrirlo a la red es decisión explícita.
 - Sin CORS: sólo la propia página puede leer la API. Antes cualquier sitio abierto en el
   navegador podía leer posiciones y operaciones del localhost.
-- Si DASHBOARD_TOKEN está definido, cada llamada a /api lo pide (header X-Token o ?token=).
+- Si DASHBOARD_TOKEN está definido, cada llamada a /api lo pide en el header X-Token
+  (?token= también se acepta, para abrir una URL a mano, pero el panel no lo usa).
 - No hay endpoints que operen: el dashboard sólo lee.
 """
 import asyncio
@@ -106,7 +107,10 @@ def create_app(system=None, token: str = "") -> FastAPI:
                 modules[name]["corriendo"] = bool(inst._running)
         return {
             "running": True,
-            "dry_run": s.dry_run,
+            "dry_run": s.all_paper,
+            "mode": system.mode_label,
+            "live_markets": s.live_markets,
+            "capital_warnings": system.capital_warnings,
             "timezone": s.trading_timezone,
             "markets": system.feed.get_market_status() if system.feed else {},
             "modules": modules,

@@ -13,6 +13,13 @@ Cuándo opera:
 - cuando la estrategia toma una decisión nueva (cambia la fecha de su última decisión), o
 - cuando la bolsa se desvió más de 10 puntos de lo que la estrategia quiere.
 Las órdenes de venta van primero, para liberar efectivo.
+
+Cuándo NO opera:
+- si a la decisión le falta un activo que antes sí tenía (p. ej. se cayó la descarga de un
+  símbolo): con un activo menos, los pesos de los demás cambian sin que nada haya pasado;
+- si los datos de algún activo están viejos (más de 3 días en cripto, 6 en acciones);
+- en real, si la estrategia mezcla mercados de cuentas distintas (cripto en Kraken y ETFs en
+  IBKR): cada cuenta tiene su propio efectivo y la bolsa de la estrategia no puede moverlo.
 """
 import asyncio
 from datetime import datetime, timezone
@@ -29,6 +36,8 @@ logger = get_logger("allocator")
 
 DRIFT_LIMIT = 0.10        # rebalancear si un activo se desvía más de 10% del capital de la bolsa
 MIN_TRADE_FRACTION = 0.02  # no mover menos del 2% de la bolsa
+STALE_DAYS = {"crypto": 3, "stock": 6, "forex": 4}
+UNIVERSE_GRACE_DAYS = 3    # si un activo falta 3 días seguidos, se acepta el universo nuevo (p. ej. lo quitaron)
 
 
 class AllocatorBot:
@@ -98,6 +107,43 @@ class AllocatorBot:
     def _adapter_for(self, symbol: str) -> Optional[BaseAdapter]:
         return self.feed._get_adapter_for_symbol(symbol)
 
+    async def _data_problem(self, module: str, extra: Dict, target: Dict, held) -> Optional[str]:
+        """Motivo para no operar con esta decisión, o None si los datos están completos y al día."""
+        now = datetime.now(timezone.utc)
+        universe = list(extra.get("universe") or [])
+        if universe:
+            prev = await self.db.kv_get(f"{module}:universe") or []
+            missing = sorted(set(prev) - set(universe))
+            if missing:
+                miss = await self.db.kv_get(f"{module}:universe_miss") or {}
+                if miss.get("missing") != missing:
+                    miss = {"missing": missing, "since": now.isoformat()}
+                    await self.db.kv_set(f"{module}:universe_miss", miss)
+                since = datetime.fromisoformat(miss["since"])
+                if (now - since).days < UNIVERSE_GRACE_DAYS:
+                    return f"datos incompletos: faltan {', '.join(missing)} (no se opera con un universo más chico)"
+                logger.warning(f"{module}: {', '.join(missing)} lleva {UNIVERSE_GRACE_DAYS} días sin datos; "
+                               f"se acepta el universo nuevo")
+            await self.db.kv_set(f"{module}:universe", universe)
+            await self.db.kv_set(f"{module}:universe_miss", None)
+        stale = []
+        for asset, end in (extra.get("asset_ends") or {}).items():
+            adapter = self._adapter_for(asset)
+            limit = STALE_DAYS.get(adapter.market if adapter else "stock", 6)
+            ts = datetime.fromisoformat(end)
+            ts = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+            if (now - ts).days > limit:
+                stale.append(f"{asset} (hasta {ts:%Y-%m-%d})")
+        if stale:
+            return "datos viejos: " + ", ".join(stale)
+        # En real, una bolsa no puede repartir efectivo entre cuentas de brokers distintos
+        symbols = set(target) | set(held) | {u for u in universe if self._adapter_for(u)}
+        adapters = {a.market: a for a in (self._adapter_for(s) for s in symbols) if a}
+        if len(adapters) > 1 and any(not a.is_paper for a in adapters.values()):
+            return ("mezcla mercados de cuentas distintas (" + ", ".join(sorted(adapters)) + "): en real cada cuenta "
+                    "tiene su propio efectivo. Córrela en papel o usa una estrategia de un solo mercado")
+        return None
+
     async def sleeve(self, key: str) -> Dict:
         """Capital, efectivo y posiciones de la bolsa de una estrategia."""
         module = self.module_name(key)
@@ -121,6 +167,12 @@ class AllocatorBot:
         sl = await self.sleeve(key)
         equity = sl["equity"]
         await self.db.insert_sleeve_snapshot(module, equity)
+        problem = await self._data_problem(module, extra, target, sl["positions"])
+        if problem:
+            self.state[key].update(status="en pausa: " + problem, error=None,
+                                   checked_at=datetime.now(timezone.utc).isoformat())
+            logger.warning(f"Allocator {key}: no se rebalancea, {problem}")
+            return
 
         prices = await self.feed.get_prices(sorted(set(target) | set(sl["positions"])))
         current = {s: p.quantity * (prices[s].last if s in prices else p.current_price)
@@ -154,7 +206,7 @@ class AllocatorBot:
                 pending = True
                 continue
             price = prices.get(s)
-            if not price or (not self.dry_run and price.simulated):
+            if not price or (not adapter.is_paper and price.simulated):
                 pending = True
                 continue
             if delta < 0:

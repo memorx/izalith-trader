@@ -115,7 +115,7 @@
     }
     $("#offline").hidden = true; $("#summary").hidden = false;
     mode.hidden = false;
-    mode.textContent = status.dry_run ? "Papel" : "Dinero real";
+    mode.textContent = status.dry_run ? "Papel" : (status.mode || "Dinero real").replace("DINERO REAL", "Dinero real");
     mode.className = "mode-badge" + (status.dry_run ? "" : " real");
 
     const p = await api("/api/portfolio");
@@ -136,7 +136,8 @@
     // Avisos
     const alerts = [];
     if (status.freno) alerts.push(["bad", `Freno de emergencia ACTIVO: ${status.freno.motivo}. No se abren posiciones nuevas; quítalo con python -m tools.freno --quitar cuando lo revises.`]);
-    for (const o of status.unrecorded_orders || []) alerts.push(["bad", `La orden ${o.client_order_id} (${o.side} ${o.symbol}) se llenó en el exchange y el bot no la registró. Revísala a mano.`]);
+    for (const o of status.unrecorded_orders || []) alerts.push(["bad", `La orden ${o.side} ${o.symbol} (${o.module || ""}, id ${o.client_order_id}) ${o.problema || "se llenó en el exchange y el bot no la registró. Revísala a mano."}`]);
+    for (const w of status.capital_warnings || []) alerts.push(["bad", w]);
     for (const [name, m] of Object.entries(status.modules || {})) if (m.error) alerts.push(["bad", `El módulo ${name} se detuvo: ${m.error}`]);
     for (const [name, m] of Object.entries(status.markets || {})) {
       const noKeys = (m.last_error || "").startsWith("sin llaves");
@@ -201,7 +202,7 @@
     const order = ["binance", "ndax", "bitso_usdt", "kraken_limite", "kraken_mercado", "ibkr"];
     const labels = {
       binance: "Binance (MX)", ndax: "NDAX (CA)", bitso_usdt: "Bitso USDT (MX)",
-      kraken_limite: "Kraken límite (MX y CA)", kraken_mercado: "Kraken mercado (MX y CA)", ibkr: "IBKR (MX y CA)",
+      kraken_limite: "Kraken límite, 70% maker (MX y CA)", kraken_mercado: "Kraken mercado (MX y CA)", ibkr: "IBKR (MX y CA)",
     };
     const byKey = {};
     for (const r of small.filas.filter((f) => f.capital === capital)) {
@@ -437,7 +438,21 @@
     $("#vivo-body").hidden = !st.running;
     if (!st.running) return;
 
-    $("#export-csv").href = "/api/export.csv" + (token ? "?token=" + encodeURIComponent(token) : "");
+    // El token va en el header, no en la URL (las URLs quedan en el historial y en los logs)
+    if (!$("#export-csv").dataset.wired) {
+      $("#export-csv").dataset.wired = "1";
+      $("#export-csv").addEventListener("click", async (ev) => {
+        if (!token) return;   // sin token, el enlace normal funciona
+        ev.preventDefault();
+        const res = await fetch("/api/export.csv", { headers: { "X-Token": token } });
+        if (!res.ok) { $("#updated").textContent = "No se pudo descargar el CSV (" + res.status + ")"; return; }
+        const name = (res.headers.get("content-disposition") || "").match(/filename="?([^";]+)/);
+        const url = URL.createObjectURL(await res.blob());
+        const a = Object.assign(document.createElement("a"), { href: url, download: name ? name[1] : "izalith.csv" });
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+    }
     const [p, tr, od, sg] = await Promise.all([api("/api/portfolio"), api("/api/trades?limit=40"), api("/api/orders?limit=30"), api("/api/signals")]);
     let alloc = null;
     try { alloc = await api("/api/modules/allocator"); } catch (e) { /* allocator apagado */ }
