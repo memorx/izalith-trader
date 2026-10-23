@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>Izalith Trader</title>
-  <link rel="stylesheet" href="/static/styles.css?v=12">
+  <link rel="stylesheet" href="/static/styles.css?v=13">
 </head>
 <body>
 <div class="shell">
@@ -106,6 +106,7 @@
         <h3>Con poco capital: lo que dejan las comisiones de cada lugar</h3>
         <span class="spacer"></span>
         <div class="seg" id="f-capital" role="group" aria-label="Capital">
+          <button type="button" data-v="100" aria-pressed="false">$100</button>
           <button type="button" data-v="200" aria-pressed="true">$200</button>
           <button type="button" data-v="1000" aria-pressed="false">$1,000</button>
           <button type="button" data-v="5000" aria-pressed="false">$5,000</button>
@@ -196,7 +197,7 @@
     </div>
     <div class="panel" id="poly-study-panel" hidden>
       <div class="panel-head"><h3>¿Los precios de Polymarket dicen la verdad?</h3></div>
-      <p class="muted small" style="margin-top:-4px">Mercados ya resueltos: lo que costaba el "sí" 7 días antes del cierre contra cuántas veces de verdad ganó. Arriba de cero, el "sí" estaba barato; abajo, caro.</p>
+      <p class="muted small" style="margin-top:-4px">Mercados ya resueltos: lo que costaba el "sí" 7 días antes de su fecha de cierre contra cuántas veces de verdad ganó. Arriba de cero, el "sí" estaba barato; abajo, caro.</p>
       <div id="poly-study-chart" class="viz"></div>
       <p id="poly-study-text" class="small" style="margin-bottom:0"></p>
     </div>
@@ -210,7 +211,7 @@
   </section>
 </div>
 
-<script src="/static/charts.js?v=12"></script>
-<script src="/static/app.js?v=12"></script>
+<script src="/static/charts.js?v=13"></script>
+<script src="/static/app.js?v=13"></script>
 </body>
 </html>
