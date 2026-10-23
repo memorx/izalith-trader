@@ -10,6 +10,8 @@ Usage:
 """
 import argparse
 import asyncio
+import logging
+import os
 import signal
 import sys
 import warnings
@@ -78,6 +80,7 @@ class IzalithSystem:
         self._tasks: List[asyncio.Task] = []
         self._running = False
         self._stopped = False
+        self._stop_task: Optional[asyncio.Task] = None
 
     @property
     def mode_label(self) -> str:
@@ -382,8 +385,16 @@ class IzalithSystem:
             logger.error(self.module_errors["dashboard"])
 
     async def stop(self):
-        if self._stopped:
-            return
+        """
+        Apaga en orden. Se puede llamar varias veces (el archivo STOP, Ctrl+C y el final de main):
+        todas esperan al MISMO apagado. Antes la segunda llamada regresaba de inmediato, main()
+        terminaba y asyncio cancelaba el apagado a la mitad.
+        """
+        if self._stop_task is None:
+            self._stop_task = asyncio.ensure_future(self._shutdown())
+        await asyncio.shield(self._stop_task)
+
+    async def _shutdown(self):
         self._stopped = True
         logger.info("Shutting down...")
         self._running = False
@@ -461,6 +472,11 @@ async def main():
         logger.error(f"Fatal error: {e}")
     finally:
         await system.stop()
+        # El apagado ya cerró la base y los adaptadores. Algún hilo de red (yfinance, ccxt) puede
+        # tardar minutos en soltar y asyncio.run lo esperaría con el proceso colgado: se sale ya.
+        logging.shutdown()
+        lock.close()
+        os._exit(0)
 
 
 if __name__ == "__main__":

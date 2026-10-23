@@ -176,17 +176,18 @@ async def inflight_orders(db: Database, module: str, symbol: Optional[str] = Non
 async def take_unrecorded(db: Database, module: str) -> List[OrderResult]:
     """
     Llenados del módulo que el exchange hizo y el bot no registró (los deja la reconciliación).
-    Se marcan como registrados: quien llama TIENE que pasarlos al portafolio.
     Sirve para los módulos cuyo propósito cambia en cada intento (el rebalanceo por desvío del
     allocator lleva la hora), donde el mismo propósito nunca se vuelve a pedir.
+
+    No los marca: quien los pasa al portafolio llama a mark_recorded() DESPUÉS de lograrlo.
+    Si el registro falla, siguen como filled_unrecorded (y como alerta).
     """
-    out = []
-    for r in await db.get_orders_by_status(["filled_unrecorded"]):
-        if r["module"] != module:
-            continue
-        await db.update_order(r["client_order_id"], "filled", error="Registrada tarde (se llenó sin que el bot la anotara)")
-        out.append(_late_fill(r, r["symbol"]))
-    return out
+    return [_late_fill(r, r["symbol"]) for r in await db.get_orders_by_status(["filled_unrecorded"])
+            if r["module"] == module]
+
+
+async def mark_recorded(db: Database, client_order_id: str) -> None:
+    await db.update_order(client_order_id, "filled", error="Registrada tarde (se llenó sin que el bot la anotara)")
 
 
 PROBLEMS = {
