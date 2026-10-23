@@ -39,6 +39,7 @@ acciones con precios de Yahoo. Para dinero real hacen falta cuentas (ver abajo).
 | `lab/small_account.py` | Las mismas estrategias con cuentas de 200, 1,000 y 5,000 dólares y las comisiones reales de Binance, NDAX, Bitso, Kraken (límite y mercado) e IBKR (con su dólar mínimo por orden). |
 | `modules/allocator` | Corre en vivo las estrategias de portafolio del laboratorio con **el mismo código** del backtest; cada una con su propio capital. En cripto usa órdenes límite que esperan en el libro (mitad de comisión en Kraken). |
 | `modules/collectors` | Fotos de mercados poco vigilados cada 15 min: funding de Binance, Bybit y Hyperliquid y sus diferencias, perpetuos de acciones y oro 24/7, prima del peso en Bitso, **dólar cripto y BTC en 16 países** (Argentina, Venezuela, India, Corea, Turquía, Nigeria, Sudáfrica...), Polymarket. Guarda historial por hora. |
+| `modules/reports` | Resumen diario por Telegram, alertas cuando algo requiere atención (un módulo se cayó, una orden sin registrar, una fuente sin conexión) y latido para healthchecks.io. |
 | `modules/signals` | Alertas a Telegram/Discord. Nunca manda alertas calculadas con precios inventados. |
 | `modules/dca` | Compras periódicas por monto, en la zona horaria configurada, sin repetir un turno tras un reinicio. |
 | `modules/grid` | Rejilla de compras/ventas. Se niega a arrancar si cada vuelta pierde por comisiones. |
@@ -86,11 +87,38 @@ panel (`data/lab/venues.json`).
 
 ## Pendiente
 
-- Adaptador de **Interactive Brokers** (es la cuenta de acciones recomendada para México y
-  Canadá; hoy el bot usa Alpaca o Yahoo en papel).
+- Probar el adaptador de **Interactive Brokers** contra IB Gateway de verdad (hoy sólo está
+  probado con un IBKR falso en las pruebas).
 - Adaptador de **perpetuos** (Binance USD-M / Hyperliquid) para correr en vivo el carry y las
   estrategias con cortos.
 - Backtests de los mercados en investigación cuando los recolectores junten historial.
+
+## Portafolios combinados
+
+`combo_verdes` (las 7 verdes) y `combo_chico` (tendencia BTC+ETH + tendencia del S&P, para cuentas
+chicas) reparten capital según el riesgo de cada pieza y rebalancean cada mes. En el laboratorio
+caen mucho menos que cada estrategia sola. Se corren en vivo como cualquier otra:
+`ALLOCATOR_STRATEGIES=combo_chico`.
+
+## Termómetros
+
+En "Mercados poco vigilados" del panel: curva de tasas de EE.UU., miedo crediticio (HYG/IEF), VIX,
+dólar, tasas del Banco de Canadá y de Banxico (con `BANXICO_TOKEN`), stablecoins en circulación
+(DefiLlama), volatilidad esperada de BTC y ETH (Deribit) y apalancamiento en perpetuos (Binance).
+
+## Interactive Brokers
+
+`STOCKS_BROKER=ibkr` con TWS o IB Gateway abierto y la API habilitada (`IBKR_PORT`: 4002 papel,
+4001 real). Compra por monto con fracciones de acción; si la cuenta no tiene ese permiso, usa
+acciones enteras.
+
+## Para el contador
+
+```bash
+.venv\Scripts\python -m tools.exportar --anio 2026
+```
+
+O el botón "Descargar CSV para el contador" en "En vivo".
 
 ## Pruebas
 

@@ -11,11 +11,11 @@
 *(Esta sección se reescribe completa en cada actualización.)*
 
 **Hecho y funcionando**
-- Laboratorio (`lab/`): 33 estrategias en el catálogo (7 inventadas, ninguna pasa la prueba de "no fue suerte"), evaluadas con `python -m lab.review`.
+- Laboratorio (`lab/`): 35 estrategias en el catálogo, evaluadas con `python -m lab.review`. Incluye 7 inventadas (ninguna pasa la prueba de "no fue suerte") y 2 portafolios combinados en verde.
   - Verde: 60/40, efectivo+10% BTC, DCA S&P, Faber, momentum dual, RSI-2, tendencia BTC, tendencia BTC+ETH con volatilidad controlada y DCA BTC.
   - Rojo: las 3 del scalper original, BTC 2x (caída de -93%) y carry en altcoins.
 - Análisis de cuenta chica (`python -m lab.small_account`): las mismas estrategias con 200, 1,000 y 5,000 dólares y las comisiones reales de cada plataforma. Se ve en el panel.
-- Bot en vivo arreglado y con pruebas: 79 pasan (`pytest tests/`).
+- Bot en vivo arreglado y con pruebas: 91 pasan (`pytest tests/`). Incluye adaptador de IBKR, reportes por Telegram y exportación para el contador.
   - Órdenes límite pasivas en cripto.
   - El papel cobra las comisiones reales del exchange y el dólar mínimo por orden de IBKR.
 - Corrida en papel con el escenario de Memo, desde el 22/10 en la tarde:
@@ -37,6 +37,35 @@
 
 **Siguiente paso**
 - Dejar correr el papel un mes. Si Memo abre Kraken Pro, poner las llaves (sólo permiso de operar) con `DRY_RUN=true` primero.
+
+---
+
+## 22/10/2026 — Portafolios combinados, termómetros, alertas e IBKR
+
+**Qué cambió**
+- **Portafolios combinados** (`combo_verdes`, `combo_chico`): capital según el riesgo de cada pieza y rebalanceo mensual. Los dos salieron en verde, con datos de 2017 a 2026.
+
+  | | Rinde al año | Peor caída | Peor año | Meses en positivo |
+  |---|---|---|---|---|
+  | Las 7 verdes | 11.0% | -15% | -9% | 69% |
+  | Chico (cripto + S&P) | 15.2% | -22% | -20% (2022) | 63% |
+  | SPY en el mismo periodo | 15.1% | -34% | | |
+
+- **Termómetros** en los recolectores y en el panel: curva de tasas, HYG/IEF, VIX, DXY, Banco de Canadá, Banxico (con token), stablecoins (DefiLlama), DVOL de Deribit, apalancamiento y long/short de Binance. Las series históricas quedan en `data/cache`.
+- **Módulo `reports`:**
+  - Resumen diario por Telegram (`REPORT_HOUR`).
+  - Alertas sin repetir.
+  - Latido para healthchecks.io (`HEALTHCHECK_URL`).
+- **`tools/exportar.py` y botón de CSV** para el contador.
+- **Adaptador de IBKR** (`core/adapters/ibkr.py`, `ib_async`). Probado sólo con un IBKR falso.
+
+**Decisiones y descartes**
+- **FRED no contestó desde la red de Memo** (timeout de 90 s). Se usan equivalentes de Yahoo (^TNX - ^IRX, HYG/IEF) y FRED queda como primera opción si vuelve.
+- **Coinglass descartado:** ya pide llave. Se usa lo público de Binance, que sólo guarda 30 días.
+- **Combinaciones con optimismo heredado:** las piezas se eligieron por haber salido verdes. Se anota en el aviso de cada una.
+- **Pendiente de Memo para las alertas:**
+  - Crear un bot de Telegram (BotFather) y un check en healthchecks.io; Claude no crea cuentas.
+  - Reiniciar el bot para que tome los módulos nuevos.
 
 ---
 
