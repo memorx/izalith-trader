@@ -144,7 +144,7 @@ O el botón "Descargar CSV para el contador" en "En vivo".
 .venv\Scripts\python -m pytest tests/ -q
 ```
 
-126 pruebas. Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de
+128 pruebas. Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de
 largos y cortos, cierres parciales, efectivo tras reinicio, el día local, órdenes duplicadas,
 órdenes que quedan vivas o se llenan tarde, errores de red a media orden (contra un Kraken y un
 IBKR falsos), el freno, el modo real, el calendario de NYSE, los candados del allocator, el

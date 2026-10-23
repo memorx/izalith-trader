@@ -16,23 +16,42 @@
   - Las 11 inventadas: ninguna pasa "no fue suerte" (contando 82 variantes probadas).
 - Cuenta chica (`python -m lab.small_account`): ahora con 100, 200, 1,000 y 5,000 dólares. Tendencia BTC+ETH con $200: 18.0% al año en Kraken con órdenes límite (70% maker) contra 21.3% en el laboratorio.
 - Estudio de Polymarket (`python -m lab.polymarket_study`): comprar al favorito no tiene ventaja (entre -6.1% y +2.7% por apuesta, 95% de confianza).
-- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 126 pruebas pasan (`pytest tests/`).
+- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 128 pruebas pasan en la rama de arreglos (`pytest tests/`).
 - Arranque automático al iniciar sesión (carpeta Inicio de Windows); `tools/detener.bat` lo apaga en orden.
-- Corrida en papel de Memo: `.env` con `DRY_RUN=true`, Kraken, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una. La corre Memo en su terminal; base `data/izalith.db`.
-- Rama `feat/laboratorio-y-refinamiento` en GitHub, con PR a `master`: https://github.com/memorx/izalith-trader/pull/1 (abierto el 23/10, sin merge).
+- Corrida en papel de Memo: `.env` con `DRY_RUN=true`, Kraken, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una; base `data/izalith.db`.
+  - Reiniciada con `master` el 23/10 cerca de las 16:00 (hora de México). Corre oculta con `tools/arrancar_oculto.vbs`, igual que el arranque automático; el log va a `logs/bot_consola.log`.
+  - Al arrancar: modo papel, 3 posiciones abiertas, sin alertas ni errores. El mes de papel cuenta desde aquí.
+- PR #1 aprobado por Fable en la tercera revisión y con merge a `master` el 23/10 (merge commit `9701b39`): https://github.com/memorx/izalith-trader/pull/1.
+- **Telegram conectado (23/10):** bot `@tu_bot_de_telegram`, creado desde la sesión de Telegram Web de Memo con BotFather. El token y el chat van en el `.env`. Mensaje de prueba recibido. Llegan el resumen diario a las 21:00, las alertas y unas 12 señales al día; para quitar las señales, se saca `signals` de `ACTIVE_MODULES`.
 
 **A medias**
-- **Corrida en papel:** para que el mes cuente, Memo tiene que reiniciar el bot con el código del 23/10. Antes de eso, el papel no podía vender después de un reinicio.
+- **Rama `fix/apagado-y-llenados-tardios` (128 pruebas), pendiente de revisión de Fable y merge:**
+  - Apagado: con `detener.bat` el bot se quedaba colgado; ya se probó un ciclo completo de detener y arrancar.
+  - El detalle menor que dejó Fable: el llenado tardío se marca como registrado sólo después de pasarlo al portafolio.
 - **Adaptador de perpetuos (Binance USD-M / Hyperliquid):** no existe. Sin él, el carry y las estrategias con cortos no corren en vivo.
 - **IBKR y Kraken en real:** los dos adaptadores sólo están probados contra versiones falsas. Falta una prueba con la cuenta de papel de IBKR (puerto 4002) y una orden chica en Kraken.
 - **Recolectores:** guardan historial por hora (tabla `kv`, llaves `collect:AAAA-MM-DDTHH`); faltan semanas de datos para hacer backtest de los mercados en investigación.
-- **Pendientes de Memo:** crear el bot de Telegram (BotFather) y el check de healthchecks.io.
+- **Pendiente de Memo:** crear la cuenta de healthchecks.io y su check (aviso por correo si el bot se cae). Claude no crea cuentas nuevas.
 
 **Bloqueado**
 - **Residencia fiscal:** (nota personal retirada)
 
 **Siguiente paso**
-- Que Memo revise y haga merge del PR, reinicie el bot y deje correr el papel un mes.
+- Que Fable revise y haga merge de `fix/apagado-y-llenados-tardios`. Después, dejar correr el papel hasta el 23/11/2026.
+
+---
+
+## 23/10/2026 (tarde) — Telegram conectado y el apagado que se quedaba colgado
+
+**Qué cambió**
+- Memo pidió crear el bot de Telegram desde Chrome. Se hizo con BotFather en su sesión de Telegram Web: `@tu_bot_de_telegram`, con el token y el chat guardados en el `.env`.
+- Al reiniciar para que el bot tomara Telegram, `detener.bat` dijo "detenido" pero el proceso seguía vivo, sin panel y sin candado.
+  - **Causa:** el archivo STOP lanzaba el apagado como tarea aparte; `main()` llamaba a `stop()` otra vez, que regresaba de inmediato, y asyncio cancelaba el apagado a la mitad. Luego el proceso esperaba hilos de red que no soltaban.
+  - **Arreglo:** todas las llamadas a `stop()` esperan el mismo apagado y, al terminar, el proceso sale sin esperar esos hilos (`os._exit`).
+  - **Comprobado** con un ciclo real de detener y arrancar: "System stopped. Goodbye!" y cero procesos colgados.
+
+**Decisiones y descartes**
+- La API de la cuenta personal de Telegram (my.telegram.org) no se creó: pide iniciar sesión con un código y daría acceso a todos los chats de Memo. Para los reportes basta la API de bots.
 
 ---
 
