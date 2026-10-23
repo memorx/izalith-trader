@@ -6,6 +6,7 @@ aiohttp>=3.9.0
 # Exchanges
 ccxt>=4.0.0
 alpaca-py>=0.30.0
+ib_async>=2.0.0
 
 # Data & Analysis
 pandas>=2.0.0
