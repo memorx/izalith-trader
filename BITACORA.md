@@ -19,7 +19,7 @@
 - Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 121 pruebas pasan (`pytest tests/`).
 - Arranque automático al iniciar sesión (carpeta Inicio de Windows); `tools/detener.bat` lo apaga en orden.
 - Corrida en papel de Memo: `.env` con `DRY_RUN=true`, Kraken, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una. La corre Memo en su terminal; base `data/izalith.db`.
-- Rama `feat/laboratorio-y-refinamiento` en GitHub, con PR a `master` (23/10).
+- Rama `feat/laboratorio-y-refinamiento` en GitHub, con PR a `master`: https://github.com/memorx/izalith-trader/pull/1 (abierto el 23/10, sin merge).
 
 **A medias**
 - **Corrida en papel:** para que el mes cuente, Memo tiene que reiniciar el bot con el código del 23/10. Antes de eso, el papel no podía vender después de un reinicio.
