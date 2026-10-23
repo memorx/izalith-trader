@@ -279,6 +279,14 @@ class CryptoAdapter(BaseAdapter):
 
     # ── Órdenes ──
 
+    @staticmethod
+    def _status(order: Dict) -> str:
+        """
+        Estado de una orden de ccxt. Vacío se trata como VIVA: Kraken contesta AddOrder sólo con
+        el txid, así que ccxt regresa status=None aunque la orden esté en el libro.
+        """
+        return (order.get("status") or "open").lower()
+
     def _order_result(self, symbol: str, side: str, quantity: float, order: Dict, cid: str) -> OrderResult:
         filled = float(order.get('filled') or 0.0)
         avg = float(order.get('average') or order.get('price') or 0.0)
@@ -295,9 +303,14 @@ class CryptoAdapter(BaseAdapter):
             elif cur in (None, quote, "USD", "USDT", "USDC"):
                 fee_quote += float(f['cost'])
             else:
-                # Comisión en otra moneda (BNB en Binance): se convierte con su último precio si se conoce
+                # Comisión en otra moneda (BNB en Binance): se convierte con su último precio; si no se
+                # conoce, se estima como la comisión de taker sobre el monto (sumar BNB como dólares no sirve)
                 px = self._last_px.get(f"{cur}/USDT") or self._last_px.get(f"{cur}/{quote}")
-                fee_quote += float(f['cost']) * px if px else float(f['cost'])
+                if px:
+                    fee_quote += float(f['cost']) * px
+                else:
+                    logger.warning(f"Comisión en {cur} sin precio para convertir; se estima con {self.taker_fee:.2%}")
+                    fee_quote += filled * avg * self.taker_fee
         # Si la comisión se cobró en el activo comprado, lo que queda en la cuenta es menos
         net_filled = filled - fee_base if side == "buy" else filled
         return OrderResult(
@@ -307,7 +320,7 @@ class CryptoAdapter(BaseAdapter):
             symbol=symbol, side=side, quantity=quantity,
             price=avg,
             filled_quantity=net_filled,
-            status=order.get('status') or 'unknown',
+            status=order.get('status') or 'unknown',   # 'unknown' = en vuelo para execute_order
             fee=fee_quote,
         )
 
@@ -367,10 +380,17 @@ class CryptoAdapter(BaseAdapter):
             return OrderResult(success=False, symbol=symbol, side=side, quantity=qty,
                                status="failed", error=str(e), client_order_id=cid)
 
-        if order_type == "market" and not order.get('filled'):
-            fetched = await self._find_order(symbol, cid)
-            if fetched:
-                order = fetched
+        if order.get("status") is None or order.get("filled") is None:
+            # Kraken sólo regresa el txid al crear: el estado y lo llenado hay que pedirlos
+            for _ in range(5 if order_type == "market" else 1):
+                try:
+                    order = {**order, **await self._trade.fetch_order(order["id"], ex_symbol)}
+                except Exception:
+                    fetched = await self._find_order(symbol, cid)
+                    order = fetched or order
+                if order_type != "market" or self._status(order) not in OPEN_STATES:
+                    break
+                await asyncio.sleep(1)
         logger.info(f"Orden {order_type} {side} {qty} {symbol} - id {order.get('id')} ({cid})")
         return self._order_result(symbol, side, qty, order, cid)
 
@@ -388,7 +408,8 @@ class CryptoAdapter(BaseAdapter):
                 found.append(self._order_result(symbol, order.get("side", ""), float(order.get("amount") or 0), order, cid))
         if not found:
             return None
-        live = any((r.status or "").lower() in OPEN_STATES for r in found)
+        live = any((r.status or "").lower() in OPEN_STATES or (r.status or "").lower() in ("", "unknown")
+                   for r in found)
         filled = [r for r in found if r.filled_quantity > 0]
         if not filled:
             r = found[0]
@@ -409,7 +430,7 @@ class CryptoAdapter(BaseAdapter):
                 logger.warning(f"Cancelar la orden {order.get('id')} falló (intento {i + 1}): {e}")
             try:
                 o = await self._trade.fetch_order(order["id"], ex_symbol)
-                if (o.get("status") or "").lower() not in OPEN_STATES:
+                if self._status(o) not in OPEN_STATES:
                     return o
             except Exception:
                 pass
@@ -426,7 +447,7 @@ class CryptoAdapter(BaseAdapter):
             except OrderLookupError:
                 ok = False
                 continue
-            if order and (order.get("status") or "").lower() in OPEN_STATES:
+            if order and self._status(order) in OPEN_STATES:
                 ok = ok and (await self._cancel_confirmed(order, self.resolve_symbol(symbol))) is not None
         return ok
 
@@ -490,13 +511,19 @@ class CryptoAdapter(BaseAdapter):
                     logger.warning(f"Orden pasiva {attempt} de {symbol} rechazada: {e}")
                     continue
                 logger.warning(f"La orden pasiva {attempt} de {symbol} sí entró pese al error ({e})")
+            if order.get("status") is None or order.get("filled") is None:
+                # Kraken sólo regresa el txid al crear: el estado y lo llenado hay que pedirlos
+                try:
+                    order = {**order, **await self._trade.fetch_order(order["id"], ex_symbol)}
+                except Exception:
+                    pass
             deadline = loop.time() + wait
-            status = (order.get("status") or "").lower()
+            status = self._status(order)
             while status in OPEN_STATES and loop.time() < deadline:
                 await asyncio.sleep(10)
                 try:
                     order = await self._trade.fetch_order(order["id"], ex_symbol)
-                    status = (order.get("status") or "").lower()
+                    status = self._status(order)
                 except Exception:
                     pass
             if status in OPEN_STATES:
@@ -519,9 +546,9 @@ class CryptoAdapter(BaseAdapter):
             if p and remaining * p.last >= self.min_notional(symbol):
                 logger.info(f"Orden pasiva de {symbol} no se llenó completa; el resto ({remaining}) va a mercado")
                 rest = await self._send(symbol, side, remaining, "market", None, sub_client_id(cid, "m"))
-                if rest.status == "unknown":
-                    unconfirmed = True
-                elif rest.success and rest.filled_quantity > 0:
+                if rest.success and (rest.status or "").lower() in set(OPEN_STATES) | {"", "unknown"}:
+                    unconfirmed = True          # la de mercado no terminó o no se sabe: no se da por llena
+                if rest.success and rest.filled_quantity > 0:
                     fills.append(rest)
 
         total = sum(f.filled_quantity for f in fills)

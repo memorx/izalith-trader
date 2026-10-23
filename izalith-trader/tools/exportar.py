@@ -46,7 +46,8 @@ def rows_for_csv(trades, tz: ZoneInfo):
 
 async def export(year=None, include_paper=False, out_dir: Path = None) -> Path:
     s = get_settings()
-    db = Database(s.data_dir / "izalith.db", s.trading_timezone)
+    db = Database(s.db_path, s.trading_timezone)   # la misma base que usa el bot (papel o real)
+    print(f"Base: {s.db_path}")
     await db.connect()
     try:
         since = f"{year}-01-01" if year else None

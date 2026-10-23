@@ -115,8 +115,7 @@ class IzalithSystem:
             logger.error(blocked)
             return False
 
-        # Papel y real nunca en la misma base: la historia de práctica no se mezcla con dinero de verdad
-        db_path = s.data_dir / ("izalith.db" if s.all_paper else "izalith_real.db")
+        db_path = s.db_path   # izalith.db en papel, izalith_real.db si algún mercado opera en real
         try:
             self.db = await get_database(db_path, s.trading_timezone)
             log_module_status("Database", "OK", str(db_path))

@@ -81,7 +81,9 @@ class FakeKraken:
                 self.orders[o["id"]] = o
             raise Exception(self.create_error)
         self.orders[o["id"]] = o
-        return dict(o)
+        # Como ccxt con Kraken: AddOrder sólo contesta el txid, así que no hay status ni llenado
+        return {"id": o["id"], "clientOrderId": None, "status": None, "filled": None, "amount": None,
+                "price": None, "average": None, "fee": None}
 
     async def fetch_order(self, oid, symbol=None, params=None):
         return dict(self.orders[oid])
@@ -141,6 +143,19 @@ async def test_passive_order_stops_when_lookup_fails(monkeypatch):
     r = await a.place_passive_order("BTC/USDT", "buy", 0.5, new_client_order_id())
     assert r.status == "en_vuelo"
     assert len(fake.create_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_passive_order_without_status_waits_and_cancels_before_requote(monkeypatch):
+    """Fable, 23 oct: con status=None el bot no esperaba ni cancelaba y mandaba 4 órdenes por una."""
+    fake = FakeKraken()
+    a = _live_kraken(fake, monkeypatch)
+    r = await a.place_passive_order("BTC/USDT", "buy", 0.5, new_client_order_id())
+    assert [c[0] for c in fake.create_calls] == ["limit", "limit", "limit", "market"]
+    limits = [o for o in fake.orders.values() if o["clientOrderId"] != fake.create_calls[-1][1]]
+    assert all(o["status"] == "canceled" for o in limits)        # cada límite se canceló antes de la siguiente
+    sent = sum(o["filled"] for o in fake.orders.values())
+    assert sent == pytest.approx(0.5) and r.filled_quantity == pytest.approx(0.5)
 
 
 @pytest.mark.asyncio
@@ -325,3 +340,47 @@ def test_ibkr_commission_estimate():
     assert estimated_commission(10, 50) == pytest.approx(1.0)        # mínimo 1 USD
     assert estimated_commission(0.5, 100) == pytest.approx(0.5)      # tope de 1% del monto
     assert estimated_commission(1000, 10) == pytest.approx(5.0)      # 0.005 por acción
+
+
+# ── Llenados huérfanos y órdenes atoradas (segunda revisión de Fable) ──
+
+@pytest.mark.asyncio
+async def test_unrecorded_fill_is_taken_once_by_its_module(db):
+    from core.execution import take_unrecorded
+    await db.insert_order_intent("alloc:x", "BTC/USDT", "buy", "c1", amount=50, purpose="alloc:x:drift-2026102310:BTC/USDT:buy")
+    await db.update_order("c1", "filled_unrecorded", "x", 100.0, 0.4, 0.2)
+    assert await take_unrecorded(db, "alloc:otra") == []
+    got = await take_unrecorded(db, "alloc:x")
+    assert len(got) == 1 and got[0].filled_quantity == pytest.approx(0.4) and got[0].side == "buy"
+    assert await take_unrecorded(db, "alloc:x") == []
+
+
+@pytest.mark.asyncio
+async def test_allocator_waits_while_an_order_is_in_flight(db):
+    from modules.allocator.bot import AllocatorBot
+    await db.insert_order_intent("alloc:x", "BTC/USDT", "buy", "c2", amount=50, purpose="alloc:x:drift-2026102310:BTC/USDT:buy")
+    await db.update_order("c2", "open")
+    bot = AllocatorBot({}, SimpleNamespace(_get_adapter_for_symbol=lambda s: None), None, db, {})
+    bot.state["x"] = {}
+
+    async def no_decision(key):
+        raise AssertionError("no debió calcular ni operar con una orden en vuelo")
+    bot._decision = no_decision
+    await bot.step("x")
+    assert bot.state["x"]["status"].startswith("esperando")
+
+
+@pytest.mark.asyncio
+async def test_stuck_order_becomes_an_alert(db):
+    from core.execution import order_problems
+    await db.insert_order_intent("dca", "BTC/USDT", "buy", "c3", amount=50, purpose="p-stuck")
+    await db._conn.execute("UPDATE orders SET created_at = '2026-01-01T00:00:00' WHERE client_order_id = 'c3'")
+    await db._conn.commit()
+    problems = await order_problems(db)
+    assert problems and problems[0]["client_order_id"] == "c3" and "sin resolverse" in problems[0]["problema"]
+
+
+def test_tools_use_the_same_database_as_the_bot():
+    from config.settings import Settings
+    assert Settings(dry_run=True).db_path.name == "izalith.db"
+    assert Settings(dry_run=False, binance_api_key="k").db_path.name == "izalith_real.db"

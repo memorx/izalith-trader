@@ -16,7 +16,7 @@
   - Las 11 inventadas: ninguna pasa "no fue suerte" (contando 82 variantes probadas).
 - Cuenta chica (`python -m lab.small_account`): ahora con 100, 200, 1,000 y 5,000 dólares. Tendencia BTC+ETH con $200: 18.0% al año en Kraken con órdenes límite (70% maker) contra 21.3% en el laboratorio.
 - Estudio de Polymarket (`python -m lab.polymarket_study`): comprar al favorito no tiene ventaja (entre -6.1% y +2.7% por apuesta, 95% de confianza).
-- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 121 pruebas pasan (`pytest tests/`).
+- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 126 pruebas pasan (`pytest tests/`).
 - Arranque automático al iniciar sesión (carpeta Inicio de Windows); `tools/detener.bat` lo apaga en orden.
 - Corrida en papel de Memo: `.env` con `DRY_RUN=true`, Kraken, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una. La corre Memo en su terminal; base `data/izalith.db`.
 - Rama `feat/laboratorio-y-refinamiento` en GitHub, con PR a `master`: https://github.com/memorx/izalith-trader/pull/1 (abierto el 23/10, sin merge).
@@ -57,8 +57,20 @@
 **Por qué**
 - Con dinero real, una orden duplicada o un freno que mide otra cuenta cuestan dinero de verdad. Era lo que faltaba antes de poder pasar a real.
 
+- **Segunda revisión de Fable (mismo día), no aprobó el merge:**
+  - Mi arreglo de la orden pasiva había metido un error peor. Kraken contesta AddOrder sólo con el txid, así que ccxt regresa `status=None`, y el bot no esperaba ni cancelaba: mandaba hasta 4 órdenes por una.
+  - La prueba no lo vio porque el Kraken falso contestaba `status: "open"`. Ahora contesta como el real.
+  - Fable encontró además:
+    - Llenados huérfanos que el allocator nunca registraba.
+    - Una orden en vuelo podía repetirse en el desvío de la hora siguiente.
+    - `freno.py` y `exportar.py` seguían usando la base de papel.
+    - El `.bat` de rotación de logs tenía caracteres de retroceso en la ruta.
+    - Las comisiones en BNB se sumaban sin convertir.
+  - Todo quedó arreglado, con 126 pruebas.
+
 **Decisiones y descartes**
 - Ante la duda, una orden queda "en vuelo" y no se repite: se prefiere una orden de menos a una doble.
+- Un estado vacío de ccxt cuenta como orden viva, nunca como terminada.
 - Si el exchange no conoce una orden de hace más de 12 h, queda para revisar a mano ("revisar") en vez de suponer que no entró.
 - En real no se corren estrategias que mezclan cuentas (cripto en Kraken + ETFs en IBKR): cada cuenta tiene su efectivo y la bolsa de la estrategia no puede moverlo. En papel sí.
 - Afirmaciones corregidas en el README: "caen mucho menos" pasó a "algo menos"; el número de estrategias, de pruebas y de candados; y qué hace la reconciliación.

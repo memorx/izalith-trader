@@ -27,7 +27,7 @@ from typing import Dict, List, Optional
 
 from core.adapters.base import BaseAdapter
 from core.data.feed import UnifiedFeed
-from core.execution import execute_order
+from core.execution import execute_order, inflight_orders, take_unrecorded
 from core.portfolio.tracker import PortfolioTracker
 from core.utils.database import Database
 from core.utils.logger import get_logger
@@ -156,8 +156,29 @@ class AllocatorBot:
         return {"cash": cash, "equity": cash + value, "realized": realized,
                 "positions": {p.symbol: p for p in positions}}
 
+    async def _adopt_unrecorded(self, key: str, module: str) -> None:
+        """Registra en la bolsa lo que el exchange llenó sin que el bot lo anotara."""
+        for r in await take_unrecorded(self.db, module):
+            adapter = self._adapter_for(r.symbol)
+            if r.side == "buy":
+                await self.portfolio.add_position(symbol=r.symbol, market=adapter.market if adapter else "crypto",
+                                                  side="buy", quantity=r.filled_quantity, price=r.price,
+                                                  module=module, strategy=key, fee=r.fee,
+                                                  client_order_id=r.client_order_id)
+            else:
+                await self.portfolio.reduce_position(r.symbol, r.filled_quantity, r.price, module=module, fee=r.fee)
+            logger.warning(f"Allocator {key}: se registró tarde {r.side} {r.filled_quantity} {r.symbol} @ {r.price}")
+
     async def step(self, key: str) -> None:
         module = self.module_name(key)
+        await self._adopt_unrecorded(key, module)
+        waiting = await inflight_orders(self.db, module)
+        if waiting:
+            # Con una orden sin resolver no se manda otra: el rebalanceo por desvío cambia de propósito
+            # cada hora y podría duplicarla. La reconciliación la resuelve en menos de una hora.
+            self.state[key].update(status=f"esperando {len(waiting)} orden(es) en vuelo",
+                                   checked_at=datetime.now(timezone.utc).isoformat())
+            return
         extra = await self._decision(key)
         if extra.get("perp_cols"):
             self.state[key].update(status="no soportada", error="Necesita perpetuos; el adaptador es sólo spot")

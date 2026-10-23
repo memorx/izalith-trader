@@ -20,7 +20,8 @@ from core.utils.database import Database  # noqa: E402
 
 async def main(quitar: bool) -> None:
     s = get_settings()
-    db = Database(s.data_dir / "izalith.db", s.trading_timezone)
+    db = Database(s.db_path, s.trading_timezone)   # la misma base que usa el bot (papel o real)
+    print(f"Base: {s.db_path}")
     await db.connect()
     try:
         g = RiskGuard(db, s.max_drawdown_pct)

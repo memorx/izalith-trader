@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 
 from core.adapters.base import BaseAdapter, OrderResult
 from core.data.feed import UnifiedFeed
-from core.execution import execute_order
+from core.execution import execute_order, inflight_orders
 from core.portfolio.tracker import PortfolioTracker, Position as TrackedPosition
 from core.utils.database import Database
 from core.utils.logger import get_logger, log_trade
@@ -146,6 +146,9 @@ class ScalperExecutor:
             logger.debug(f"Position size too small for {signal.symbol}")
             return None
 
+        if await inflight_orders(self.db, MODULE, signal.symbol):
+            logger.info(f"Scalper {signal.symbol}: hay una orden en vuelo; no se entra otra vez")
+            return None
         result = await execute_order(self.db, adapter, MODULE, signal.symbol, signal.action, quantity=quantity,
                                      purpose=f"scalper:entry:{signal.symbol}:{candle}")
         if not result.success or result.filled_quantity <= 0:

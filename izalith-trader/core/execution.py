@@ -167,6 +167,28 @@ async def execute_order(
     return result
 
 
+async def inflight_orders(db: Database, module: str, symbol: Optional[str] = None) -> List[Dict]:
+    """Órdenes del módulo cuyo resultado todavía no se sabe. Mientras haya una, no se manda otra igual."""
+    rows = await db.get_orders_by_status(sorted(IN_FLIGHT))
+    return [r for r in rows if r["module"] == module and (symbol is None or r["symbol"] == symbol)]
+
+
+async def take_unrecorded(db: Database, module: str) -> List[OrderResult]:
+    """
+    Llenados del módulo que el exchange hizo y el bot no registró (los deja la reconciliación).
+    Se marcan como registrados: quien llama TIENE que pasarlos al portafolio.
+    Sirve para los módulos cuyo propósito cambia en cada intento (el rebalanceo por desvío del
+    allocator lleva la hora), donde el mismo propósito nunca se vuelve a pedir.
+    """
+    out = []
+    for r in await db.get_orders_by_status(["filled_unrecorded"]):
+        if r["module"] != module:
+            continue
+        await db.update_order(r["client_order_id"], "filled", error="Registrada tarde (se llenó sin que el bot la anotara)")
+        out.append(_late_fill(r, r["symbol"]))
+    return out
+
+
 PROBLEMS = {
     "filled_unrecorded": "se llenó en el exchange y el bot todavía no la registra (se registra sola si el módulo "
                          "la vuelve a intentar; si no, revísala a mano)",
@@ -206,6 +228,9 @@ async def reconcile_pending(db: Database, adapters: Dict[str, BaseAdapter], mark
                     logger.error(f"[{o['module']}] La orden {cid} ({o['side']} {symbol}) sigue viva y no se pudo cancelar")
                     continue
                 found = await adapter.get_order_by_client_id(symbol, cid)
+                if found and (found.status or "").lower() in IN_FLIGHT:
+                    await db.update_order(cid, "en_vuelo", error="Se pidió cancelarla y sigue viva")
+                    continue
         except OrderLookupError as e:
             logger.warning(f"[{o['module']}] No se pudo revisar la orden {cid}: {e}; se intenta más tarde")
             continue
@@ -222,6 +247,14 @@ async def reconcile_pending(db: Database, adapters: Dict[str, BaseAdapter], mark
     return await order_problems(db)
 
 
+STUCK_AFTER_H = 1   # una orden sin resolver por más de esto también es alerta (detiene su estrategia)
+
+
 async def order_problems(db: Database) -> List[Dict]:
     rows = await db.get_orders_by_status(list(PROBLEMS))
-    return [{**r, "problema": PROBLEMS[r["status"]]} for r in rows]
+    out = [{**r, "problema": PROBLEMS[r["status"]]} for r in rows]
+    for r in await db.get_orders_by_status(sorted(IN_FLIGHT - set(PROBLEMS))):
+        if _age_hours(r) > STUCK_AFTER_H:
+            out.append({**r, "problema": f"lleva más de {STUCK_AFTER_H} h sin resolverse (no se pudo preguntar al "
+                                        f"exchange); no se manda otra igual hasta que se resuelva"})
+    return out
