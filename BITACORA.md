@@ -6,37 +6,78 @@
 
 ---
 
-## 📸 ESTADO AL 22/10/2026
+## 📸 ESTADO AL 23/10/2026
 
 *(Esta sección se reescribe completa en cada actualización.)*
 
 **Hecho y funcionando**
-- Laboratorio (`lab/`): 35 estrategias en el catálogo, evaluadas con `python -m lab.review`. Incluye 7 inventadas (ninguna pasa la prueba de "no fue suerte") y 2 portafolios combinados en verde.
-  - Verde: 60/40, efectivo+10% BTC, DCA S&P, Faber, momentum dual, RSI-2, tendencia BTC, tendencia BTC+ETH con volatilidad controlada y DCA BTC.
-  - Rojo: las 3 del scalper original, BTC 2x (caída de -93%) y carry en altcoins.
-- Análisis de cuenta chica (`python -m lab.small_account`): las mismas estrategias con 200, 1,000 y 5,000 dólares y las comisiones reales de cada plataforma. Se ve en el panel.
-- Bot en vivo arreglado y con pruebas: 91 pasan (`pytest tests/`). Incluye adaptador de IBKR, reportes por Telegram y exportación para el contador.
-  - Órdenes límite pasivas en cripto.
-  - El papel cobra las comisiones reales del exchange y el dólar mínimo por orden de IBKR.
-- Corrida en papel con el escenario de Memo, desde el 22/10 en la tarde:
-  - `.env` local: `DRY_RUN=true`, `CRYPTO_EXCHANGE=kraken`, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una.
-  - La corrida de prueba anterior (con $10,000) quedó guardada en `izalith-trader/data/izalith_prueba_2026-10-22.db`.
-- Panel con 5 pestañas, revisado con capturas en tema claro y oscuro.
-- Investigación de plataformas para México, Canadá y "medio año en cada país" en `izalith-trader/data/lab/venues.json`.
-- En GitHub, rama `feat/laboratorio-y-refinamiento` (sin merge a `master`).
+- Laboratorio (`lab/`): 39 estrategias, evaluadas con `python -m lab.review` (corrida del 23/10). 8 en verde: 60/40, efectivo + 10% BTC, DCA S&P, Faber, momentum dual, RSI-2, tendencia BTC y tendencia BTC+ETH con volatilidad controlada.
+  - En amarillo por las reglas corregidas: los dos combinados (piezas elegidas por salir verdes) y el DCA de BTC (caída de -83%).
+  - Las 11 inventadas: ninguna pasa "no fue suerte" (contando 82 variantes probadas).
+- Cuenta chica (`python -m lab.small_account`): ahora con 100, 200, 1,000 y 5,000 dólares. Tendencia BTC+ETH con $200: 18.0% al año en Kraken con órdenes límite (70% maker) contra 21.3% en el laboratorio.
+- Estudio de Polymarket (`python -m lab.polymarket_study`): comprar al favorito no tiene ventaja (entre -6.1% y +2.7% por apuesta, 95% de confianza).
+- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 121 pruebas pasan (`pytest tests/`).
+- Arranque automático al iniciar sesión (carpeta Inicio de Windows); `tools/detener.bat` lo apaga en orden.
+- Corrida en papel de Memo: `.env` con `DRY_RUN=true`, Kraken, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una. La corre Memo en su terminal; base `data/izalith.db`.
+- Rama `feat/laboratorio-y-refinamiento` en GitHub, con PR a `master` (23/10).
 
 **A medias**
-- **Corrida en papel:** depende de la sesión de Claude que la lanzó. Para que siga, Memo la tiene que correr con `run.py` desde su terminal o como tarea programada.
-- **Merge a `master`:** pendiente de que Memo lo pida.
-- **Adaptador de Interactive Brokers:** no existe. Es la cuenta de acciones recomendada para MX y CA; hoy acciones = Alpaca o Yahoo en papel.
+- **Corrida en papel:** para que el mes cuente, Memo tiene que reiniciar el bot con el código del 23/10. Antes de eso, el papel no podía vender después de un reinicio.
 - **Adaptador de perpetuos (Binance USD-M / Hyperliquid):** no existe. Sin él, el carry y las estrategias con cortos no corren en vivo.
-- **Recolectores:** guardan historial por hora (tabla `kv`, llaves `collect:AAAA-MM-DDTHH`), pero falta juntar semanas antes de poder hacer backtest de los mercados en investigación.
+- **IBKR y Kraken en real:** los dos adaptadores sólo están probados contra versiones falsas. Falta una prueba con la cuenta de papel de IBKR (puerto 4002) y una orden chica en Kraken.
+- **Recolectores:** guardan historial por hora (tabla `kv`, llaves `collect:AAAA-MM-DDTHH`); faltan semanas de datos para hacer backtest de los mercados en investigación.
+- **Pendientes de Memo:** crear el bot de Telegram (BotFather) y el check de healthchecks.io.
 
 **Bloqueado**
-- **Residencia fiscal de Memo:** pasa unos seis meses en México y seis en Canadá. La residencia la decide el tratado y la confirma su contador; pendiente desde el 22/10/2026. Mientras tanto se eligieron plataformas que sirven en los dos países (Kraken Pro + IBKR).
+- **Residencia fiscal de Memo:** pasa unos seis meses en México y seis en Canadá. La decide el tratado y la confirma su contador; pendiente desde el 22/10/2026. Mientras tanto se eligieron plataformas que sirven en los dos países (Kraken Pro + IBKR).
 
 **Siguiente paso**
-- Dejar correr el papel un mes. Si Memo abre Kraken Pro, poner las llaves (sólo permiso de operar) con `DRY_RUN=true` primero.
+- Que Memo revise y haga merge del PR, reinicie el bot y deje correr el papel un mes.
+
+---
+
+## 23/10/2026 — Fable revisó todo: órdenes que podían duplicarse y el freno midiendo el papel
+
+**Qué cambió**
+- Memo pidió que Fable revisara el proyecto y luego arreglar lo que dijera. Fable encontró 30 problemas y una lista de afirmaciones exageradas. Se arreglaron todos.
+- **Lo más grave (órdenes):**
+  - Ids de orden de 23 caracteres: Kraken acepta máximo 18 o un UUID. Ahora todos son UUID y las sub-órdenes usan UUID derivados (`uuid5`).
+  - La orden pasiva de Kraken podía quedar huérfana o duplicarse si `create_order` fallaba después de entrar o si la cancelación no se confirmaba. Ahora se pregunta antes de reintentar y, si algo no se puede confirmar, no se manda nada más ("en_vuelo").
+  - Una orden aceptada pero sin llenar (IBKR "Submitted", Alpaca "accepted") quedaba como "duplicate" para siempre. Ahora se vuelve a preguntar al exchange: si sigue viva espera, si se llenó la registra el módulo y si murió se manda otra.
+  - La reconciliación marcaba como fallidas órdenes vivas sin cancelarlas. Ahora las cancela, anota lo que se llenó y corre también cada 5 minutos.
+- **Lo más grave (dinero real):**
+  - El freno se medía contra el capital de papel aun en real. Ahora real exige `REAL_CAPITAL_USD`.
+  - `DRY_RUN=false` para usar IBKR prendía Kraken en real. Ahora hay un interruptor por mercado y real exige además `LIVE_CONFIRMED=true`.
+  - La base de real va aparte (`izalith_real.db`).
+  - Una falla de red al bajar un símbolo cambiaba en silencio los pesos de la estrategia. Ahora se usa el caché y el allocator no opera si le falta un activo o los datos están viejos.
+- **El papel no podía vender después de un reinicio:** el saldo vivía en memoria. Ahora sale del portafolio.
+- **Laboratorio:** "W-MON" marcaba martes; los combinados quedan en amarillo como máximo; el DCA con caídas de más de 60% también; la prueba de suerte cuenta 82 variantes en lugar de 11 ideas.
+- **Polymarket:** la foto se tomaba 7 días antes del cierre real, que depende del resultado. Ahora se toma 7 días antes de la fecha programada y se excluyen los 16,031 mercados resueltos antes de tiempo. El resultado no cambió: no hay ventaja.
+
+**Por qué**
+- Con dinero real, una orden duplicada o un freno que mide otra cuenta cuestan dinero de verdad. Era lo que faltaba antes de poder pasar a real.
+
+**Decisiones y descartes**
+- Ante la duda, una orden queda "en vuelo" y no se repite: se prefiere una orden de menos a una doble.
+- Si el exchange no conoce una orden de hace más de 12 h, queda para revisar a mano ("revisar") en vez de suponer que no entró.
+- En real no se corren estrategias que mezclan cuentas (cripto en Kraken + ETFs en IBKR): cada cuenta tiene su efectivo y la bolsa de la estrategia no puede moverlo. En papel sí.
+- Afirmaciones corregidas en el README: "caen mucho menos" pasó a "algo menos"; el número de estrategias, de pruebas y de candados; y qué hace la reconciliación.
+
+---
+
+## 22/10/2026 (noche) — Freno de emergencia, papel contra laboratorio, Polymarket y arranque automático
+
+**Qué cambió**
+- **Freno de emergencia** (`core/risk_guard.py`): si lo que maneja el bot cae más de `MAX_DRAWDOWN_PCT` desde su máximo, sólo deja cerrar. Sobrevive reinicios; se quita con `python -m tools.freno --quitar`.
+- **Candado de una sola copia del bot** (puerto 47651).
+- **Seguimiento** papel contra laboratorio por estrategia, en el panel.
+- **Guía de llaves** (`izalith-trader/docs/LLAVES.md`): sólo permiso de operar, nunca de retirar, con lista de IPs permitidas.
+- **4 inventadas más:** los termómetros como filtro (crédito, curva, stablecoins, pánico). Ninguna mejora a su base.
+- **Estudio de Polymarket:** ¿los favoritos ganan más de lo que dice su precio? No.
+- **Arranque automático** con la carpeta Inicio de Windows (`schtasks` dio "Access is denied").
+
+**Decisiones y descartes**
+- La primera muestra de Polymarket (los 3,000 de más volumen) estaba sesgada: las sorpresas juntan volumen. Se cambió por una muestra al azar.
 
 ---
 

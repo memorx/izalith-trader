@@ -35,9 +35,10 @@ acciones con precios de Yahoo. Para dinero real hacen falta cuentas (ver abajo).
 
 | Parte | Para qué |
 |---|---|
-| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 26 estrategias de seguras a arriesgadas, con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez: acciones de EE.UU., cripto, carry de funding y **33 países** (Latinoamérica, Asia, África, Medio Oriente, Europa) vía ETFs de país. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
-| `lab/small_account.py` | Las mismas estrategias con cuentas de 200, 1,000 y 5,000 dólares y las comisiones reales de Binance, NDAX, Bitso, Kraken (límite y mercado) e IBKR (con su dólar mínimo por orden). |
-| `modules/allocator` | Corre en vivo las estrategias de portafolio del laboratorio con **el mismo código** del backtest; cada una con su propio capital. En cripto usa órdenes límite que esperan en el libro (mitad de comisión en Kraken). |
+| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 39 estrategias de seguras a arriesgadas (11 de ellas inventadas aquí), con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez más candados (historial, número de operaciones, sesgos conocidos y, para las inventadas, la prueba de "no fue suerte"): acciones de EE.UU., cripto, carry de funding y **33 países** (Latinoamérica, Asia, África, Medio Oriente, Europa) vía ETFs de país. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
+| `lab/small_account.py` | Las mismas estrategias con cuentas de 100, 200, 1,000 y 5,000 dólares y las comisiones reales de Binance, NDAX, Bitso, Kraken (límite, suponiendo que 70% se llena esperando, y mercado) e IBKR (con su dólar mínimo por orden). |
+| `lab/polymarket_study.py` | ¿Los precios de Polymarket dicen la verdad? Mercados ya resueltos, foto 7 días antes de la fecha programada de cierre. |
+| `modules/allocator` | Corre en vivo las estrategias de portafolio del laboratorio con **el mismo código** del backtest; cada una con su propio capital. En cripto usa órdenes límite que esperan en el libro (mitad de comisión en Kraken). No rebalancea si a la decisión le falta un activo o tiene datos viejos, y en real no corre estrategias que mezclan cuentas de brokers distintos. |
 | `modules/collectors` | Fotos de mercados poco vigilados cada 15 min: funding de Binance, Bybit y Hyperliquid y sus diferencias, perpetuos de acciones y oro 24/7, prima del peso en Bitso, **dólar cripto y BTC en 16 países** (Argentina, Venezuela, India, Corea, Turquía, Nigeria, Sudáfrica...), Polymarket. Guarda historial por hora. |
 | `modules/reports` | Resumen diario por Telegram, alertas cuando algo requiere atención (un módulo se cayó, una orden sin registrar, una fuente sin conexión) y latido para healthchecks.io. |
 | `modules/signals` | Alertas a Telegram/Discord. Nunca manda alertas calculadas con precios inventados. |
@@ -57,17 +58,29 @@ Cada estrategia se califica con datos de años y después de costos:
 5. funciona con parámetros vecinos (no es suerte de un número)
 6. nunca cayó más de 85% (más que eso es quiebra o liquidación)
 
-Verde = pasa todo. Amarillo = casi. Rojo = no sirve como está. Un sesgo conocido de la
-prueba (supervivencia en altcoins) deja la estrategia en amarillo como máximo.
+Además hay candados: al menos 3 años de historial, 30 operaciones en las de señales, y un sesgo
+conocido (supervivencia en altcoins, o piezas elegidas por haber salido verdes en los combinados)
+deja la estrategia en amarillo como máximo. Las inventadas además tienen que pasar "no fue suerte".
 
-Resultados del 22 oct 2026: ver `docs/ESTRATEGIAS.md` o la pestaña Estrategias del panel.
+Verde = pasa todo. Amarillo = casi. Rojo = no sirve como está.
+
+Resultados del 23 oct 2026: ver `docs/ESTRATEGIAS.md` o la pestaña Estrategias del panel.
 
 ## Seguridad del dinero
 
-- `DRY_RUN=true` por defecto: órdenes de papel con precios reales y comisiones simuladas.
+- `DRY_RUN=true` por defecto: órdenes de papel con precios reales y comisiones simuladas. Cada
+  mercado tiene su propio interruptor (`CRYPTO_DRY_RUN`, `STOCKS_DRY_RUN`, `FOREX_DRY_RUN`).
+- Para operar en real hacen falta dos llaves (`LIVE_CONFIRMED=true` y `REAL_CAPITAL_USD`); cada
+  arranque en real avisa por Telegram y la historia real va en otra base (`izalith_real.db`).
 - Con dinero real **nunca** se usan precios inventados; si una fuente falla, no hay dato y no se opera.
-- Cada orden se anota antes de mandarla con un id propio. Si el bot se cae a media orden,
-  al volver le pregunta al exchange qué pasó en lugar de mandarla otra vez.
+- Cada orden se anota antes de mandarla con un id propio (UUID). Si el bot se cae a media orden o
+  la red falla, le pregunta al exchange qué pasó antes de mandar otra: si sigue viva espera, si se
+  llenó la registra, y si no se puede saber no manda nada. Al arrancar (y cada 5 minutos con las
+  que llevan 30 minutos sin moverse) cancela las que quedaron vivas y anota lo que sí se llenó.
+- Una orden límite que no se puede confirmar como cancelada detiene todo lo demás de esa orden:
+  nunca se manda "el resto a mercado" encima de una orden que podría seguir viva.
+- Freno de emergencia: si lo que maneja el bot cae más de `MAX_DRAWDOWN_PCT` desde su máximo, sólo
+  se permiten órdenes que reducen la exposición. Se quita a mano con `python -m tools.freno --quitar`.
 - Las posiciones, stops y P&L viven en la base de datos: un reinicio no deja posiciones huérfanas.
 - El panel sólo escucha en esta computadora y no tiene botones que operen.
 - El papel cobra las comisiones reales de cada exchange (Kraken 0.40%/0.80%, Binance 0.10%...) y en
@@ -88,7 +101,8 @@ panel (`data/lab/venues.json`).
 ## Pendiente
 
 - Probar el adaptador de **Interactive Brokers** contra IB Gateway de verdad (hoy sólo está
-  probado con un IBKR falso en las pruebas).
+  probado con un IBKR falso en las pruebas). Lo mismo las órdenes de Kraken: probadas contra un
+  Kraken falso, todavía no contra la cuenta real.
 - Adaptador de **perpetuos** (Binance USD-M / Hyperliquid) para correr en vivo el carry y las
   estrategias con cortos.
 - Backtests de los mercados en investigación cuando los recolectores junten historial.
@@ -97,8 +111,10 @@ panel (`data/lab/venues.json`).
 
 `combo_verdes` (las 7 verdes) y `combo_chico` (tendencia BTC+ETH + tendencia del S&P, para cuentas
 chicas) reparten capital según el riesgo de cada pieza y rebalancean cada mes. En el laboratorio
-caen mucho menos que cada estrategia sola. Se corren en vivo como cualquier otra:
-`ALLOCATOR_STRATEGIES=combo_chico`.
+caen algo menos que cada estrategia sola, pero las piezas se eligieron por haber salido verdes, así
+que el resultado es optimista (quedan en amarillo como máximo). Mezclan cripto y acciones: en papel
+se corren como cualquier otra (`ALLOCATOR_STRATEGIES=combo_chico`); en real no, porque cada cuenta
+tiene su propio efectivo.
 
 ## Termómetros
 
@@ -110,7 +126,9 @@ dólar, tasas del Banco de Canadá y de Banxico (con `BANXICO_TOKEN`), stablecoi
 
 `STOCKS_BROKER=ibkr` con TWS o IB Gateway abierto y la API habilitada (`IBKR_PORT`: 4002 papel,
 4001 real). Compra por monto con fracciones de acción; si la cuenta no tiene ese permiso, usa
-acciones enteras.
+acciones enteras. La comisión se toma del reporte de IBKR; si no llega a tiempo, se anota la
+estimación de Pro Fixed (0.005 USD por acción, mínimo 1 USD, máximo 1% del monto). El horario
+respeta los feriados y cierres temprano de NYSE (`core/market_calendar.py`, hasta 2027).
 
 ## Para el contador
 
@@ -126,8 +144,10 @@ O el botón "Descargar CSV para el contador" en "En vivo".
 .venv\Scripts\python -m pytest tests/ -q
 ```
 
-Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de largos y
-cortos, cierres parciales, efectivo tras reinicio, el día local, órdenes duplicadas, el
+121 pruebas. Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de
+largos y cortos, cierres parciales, efectivo tras reinicio, el día local, órdenes duplicadas,
+órdenes que quedan vivas o se llenan tarde, errores de red a media orden (contra un Kraken y un
+IBKR falsos), el freno, el modo real, el calendario de NYSE, los candados del allocator, el
 horario del DCA y la validación del grid.
 
 ## Licencia
