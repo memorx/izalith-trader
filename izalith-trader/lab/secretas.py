@@ -16,7 +16,8 @@ import pandas as pd
 
 from lab import data as D
 from lab.catalog import (CRYPTO_MAJORS, EMERGENTES, PAISES, Ctx, Output, Spec, _carry_frame, _country_prices,
-                         _weights_output, every, last_of_period)
+                         _weights_output, every, get_spec, last_of_period, on_change)
+from lab.engine import Costs
 
 
 # ── 1. Freno de euforia ──
@@ -189,6 +190,66 @@ def s_oro_carry(ctx: Ctx, notional=0.5, lookback=7) -> Output:
     return out
 
 
+# ── 8 a 11. Termómetros como filtro (fijadas el 22 oct 2026, antes de probarlas) ──
+
+def _with_filter(ctx: Ctx, base_key: str, risk_on: pd.Series) -> Output:
+    """
+    La estrategia base tal cual, pero en efectivo mientras el termómetro diga "fuera".
+    Se trata la curva de la base como un activo: entrar o salir cuesta 0.15% por lado.
+    """
+    spec = get_spec(base_key)
+    base = spec.run(ctx, **spec.params)
+    curve = (1 + base.returns).cumprod()
+    risk_on = risk_on.dropna()
+    start = max(curve.index[0], risk_on.index[0])
+    curve = curve[curve.index >= start]
+    on = risk_on.astype(float).reindex(curve.index, method="ffill").fillna(0.0)
+    px = curve.to_frame("base")
+    t = on_change(on.to_frame("base"))
+    cash = ctx.cash_for(px.index) if base.cash is not None else None
+    out = _weights_output(ctx, px, t, Costs(0.001 * ctx.cost_mult, 0.0005 * ctx.cost_mult), "base", cash=cash)
+    if base.benchmark is not None:
+        out.benchmark = base.benchmark[base.benchmark.index >= start]
+        out.benchmark = out.benchmark / out.benchmark.iloc[0]
+        out.benchmark_name = base.benchmark_name
+    # Lo que el allocator tiene que replicar: el objetivo de la base, o nada si el filtro dice "fuera"
+    now_on = bool(on.iloc[-1] > 0)
+    flips = on.diff().fillna(0) != 0
+    last_flip = on.index[flips.to_numpy()][-1].isoformat() if flips.any() else on.index[0].isoformat()
+    out.extra.update({
+        "target": (base.extra.get("target") or {}) if now_on else {},
+        "target_date": max(base.extra.get("target_date") or "", last_flip),
+        "perp_cols": base.extra.get("perp_cols") or [],
+        "filtro_activo": not now_on,
+    })
+    if base.extra.get("aviso"):
+        out.extra["aviso"] = base.extra["aviso"]
+    return out
+
+
+def s_filtro_credito(ctx: Ctx, sma=100, margin=0.02) -> Output:
+    """Portafolio chico, en efectivo cuando los bonos de alto riesgo sufren (HYG/IEF 2% abajo de su promedio de 100 días)."""
+    c = D.credit_stress()
+    return _with_filter(ctx, "combo_chico", c >= c.rolling(sma).mean() * (1 - margin))
+
+
+def s_filtro_curva(ctx: Ctx) -> Output:
+    """Tendencia del S&P 500, pero sin acciones mientras la curva de tasas esté invertida."""
+    return _with_filter(ctx, "faber_trend", D.yield_curve() >= 0)
+
+
+def s_filtro_stablecoins(ctx: Ctx, days=30) -> Output:
+    """Tendencia BTC+ETH sólo si el total de stablecoins creció en el último mes (entra dinero a cripto)."""
+    s = D.stablecoin_supply()
+    s = s.resample("1D").last().ffill()
+    return _with_filter(ctx, "trend_voltarget", s > s.shift(days))
+
+
+def s_filtro_panico(ctx: Ctx, limit=70.0) -> Output:
+    """Tendencia BTC+ETH, en efectivo mientras la volatilidad que espera el mercado de opciones pase de 70%."""
+    return _with_filter(ctx, "trend_voltarget", D.deribit_dvol("BTC") < limit)
+
+
 SECRETAS: List[Spec] = [
     Spec("sec_freno_euforia", "Freno de euforia (inventada)", 2, "Cripto",
          "Kraken / Binance (sólo spot)",
@@ -225,6 +286,26 @@ SECRETAS: List[Spec] = [
          "Compra oro tokenizado y vende su perpetuo por el mismo monto: el precio del oro se cancela y queda el funding, que en 2026 llegó a pagar más de 30% al año en los perpetuos de oro.",
          "Historial muy corto; el funding puede caer; riesgo del emisor de PAXG y del exchange.", 1000, "Semanal",
          s_oro_carry, {}, {"lookback": [3, 14]}, datos="PAXG spot + funding del perpetuo desde 2025"),
+    Spec("sec_filtro_credito", "Freno por crédito (inventada)", 2, "Cripto y acciones EE.UU.",
+         "Kraken (cripto) + IBKR (SPY)",
+         "El portafolio chico, pero en efectivo cuando los bonos de alto riesgo sufren contra los del Tesoro: el crédito suele asustarse antes que las acciones.",
+         "Señales falsas en sustos de crédito que no pasan a más.", 200, "Diaria",
+         s_filtro_credito, {}, {"sma": [50, 200], "margin": [0.01, 0.04]}, datos="Portafolio chico + HYG/IEF desde 2017"),
+    Spec("sec_filtro_curva", "Freno por curva invertida (inventada)", 2, "Acciones EE.UU.",
+         "IBKR",
+         "La tendencia del S&P 500, pero sin acciones mientras la curva de tasas esté invertida: antes de cada recesión de EE.UU. desde los 70 la curva se invirtió.",
+         "La curva puede quedarse invertida mucho tiempo sin recesión (2022-2024) y dejarte fuera de la subida.", 500, "Diaria",
+         s_filtro_curva, {}, {}, datos="Faber + curva 10 años - 3 meses desde 1995"),
+    Spec("sec_filtro_stablecoins", "Freno por stablecoins (inventada)", 2, "Cripto",
+         "Kraken / Binance (sólo spot)",
+         "La tendencia BTC+ETH, sólo cuando el total de stablecoins creció en el último mes: las stablecoins son el efectivo que entra a cripto.",
+         "El crecimiento de stablecoins puede ir detrás del precio, no adelante.", 100, "Diaria",
+         s_filtro_stablecoins, {}, {"days": [14, 60]}, datos="Tendencia BTC+ETH + stablecoins (DefiLlama) desde 2018"),
+    Spec("sec_filtro_panico", "Freno por pánico en opciones (inventada)", 2, "Cripto",
+         "Kraken / Binance (sólo spot)",
+         "La tendencia BTC+ETH, en efectivo mientras el mercado de opciones espere movimientos de más de 70% al año: es cuando vienen las liquidaciones en cascada.",
+         "La volatilidad alta también llega en las subidas fuertes.", 100, "Diaria",
+         s_filtro_panico, {}, {"limit": [60.0, 85.0]}, datos="Tendencia BTC+ETH + DVOL (Deribit) desde 2021"),
 ]
 
 # Contra qué se mide cada idea: la versión sin la idea (fijado junto con los parámetros)
@@ -236,6 +317,10 @@ BASES = {
     "sec_paises_moneda_fuerte": "paises_momentum",
     "sec_btc_eth_relativo": "trend_btc",
     "sec_oro_carry": "cash",
+    "sec_filtro_credito": "combo_chico",
+    "sec_filtro_curva": "faber_trend",
+    "sec_filtro_stablecoins": "trend_voltarget",
+    "sec_filtro_panico": "trend_voltarget",
 }
 
 for _s in SECRETAS:
