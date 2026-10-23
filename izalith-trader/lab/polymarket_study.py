@@ -10,7 +10,10 @@ Reglas fijas:
 - Mercados resueltos de dos resultados (sí/no), volumen > 100,000 USD, cerrados desde 2024;
   3,000 tomados al azar (semilla fija) de todos los que cumplen, NO los de más volumen: ordenar por
   volumen total llena la muestra de sorpresas, porque una sorpresa genera muchísimo volumen.
-- La "foto" es el último precio diario 7 días antes del cierre.
+- La "foto" es el último precio diario 7 días antes de la fecha de cierre PROGRAMADA (endDate),
+  que se conoce de antemano. Se excluyen los mercados que se resolvieron antes de esa fecha
+  (más de 2 días antes): en ésos, "7 días antes del cierre real" depende del resultado.
+  (Corregido el 23 oct 2026; la primera versión usaba el cierre real.)
 - Estrategia: comprar el favorito si cuesta entre 90 y 98 centavos y esperar a la resolución.
 - Costos: comisión de Polymarket para quien toma liquidez (tasa x p x (1 - p), con tasa 0.05)
   más medio centavo de spread.
@@ -18,8 +21,10 @@ Reglas fijas:
   promete? Y lo mismo en las dos mitades del periodo, por separado.
 
 Limitaciones: el historial diario es el último precio operado, no el que habrías pagado; los
-mercados de un mismo evento se mueven juntos (no son independientes); y elegir por volumen
-deja fuera mercados chicos.
+mercados de un mismo evento se mueven juntos (no son independientes); elegir por volumen
+deja fuera mercados chicos, y el volumen que se usa para elegir incluye el que se operó
+DESPUÉS de la foto (un mercado que dio sorpresa junta más volumen y entra más fácil a la
+muestra); y quedan fuera los mercados con menos de 8 días de historial.
 
 Uso:
     python -m lab.polymarket_study
@@ -28,6 +33,7 @@ Escribe data/lab/polymarket.json (lo lee el dashboard).
 import json
 import math
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -68,12 +74,24 @@ def _parse_market(m):
         tokens = json.loads(m.get("clobTokenIds") or "[]")
     except Exception:
         return None
-    closed = m.get("closedTime") or m.get("endDate")
+    end = m.get("endDate")
+    closed = m.get("closedTime") or end
     if (len(outcomes) != 2 or len(tokens) != 2 or sorted(prices) != [0.0, 1.0]
-            or m.get("umaResolutionStatus") not in ("resolved", None) or not closed):
+            or m.get("umaResolutionStatus") not in ("resolved", None) or not end):
         return None
-    return {"id": m["id"], "pregunta": m.get("question"), "cerro": closed, "volumen": float(m.get("volumeNum") or 0),
-            "token_si": tokens[0], "gano_si": prices[0] == 1.0}
+    return {"id": m["id"], "pregunta": m.get("question"), "fin_programado": end, "cerro": closed,
+            "volumen": float(m.get("volumeNum") or 0), "token_si": tokens[0], "gano_si": prices[0] == 1.0}
+
+
+EARLY_DAYS = 2
+
+
+def closed_early(m) -> bool:
+    """¿Se resolvió más de EARLY_DAYS días antes de su fecha programada?"""
+    try:
+        return parse_time(m["cerro"]) < parse_time(m["fin_programado"]) - EARLY_DAYS * 86400
+    except Exception:
+        return True
 
 
 def closed_markets(seed: int = 2026):
@@ -108,10 +126,21 @@ def closed_markets(seed: int = 2026):
             if low or len(page) < 100:
                 break
         week = nxt
-    pool = sorted(candidates.values(), key=lambda m: m["id"])
-    print(f"{len(pool)} mercados candidatos con más de {MIN_VOLUME:,} USD; se toman {min(MAX_MARKETS, len(pool))} al azar",
-          flush=True)
+    everything = sorted(candidates.values(), key=lambda m: m["id"])
+    pool = [m for m in everything if not closed_early(m)]
+    EXCLUDED["se_resolvieron_antes"] = len(everything) - len(pool)
+    print(f"{len(everything)} mercados con más de {MIN_VOLUME:,} USD; {EXCLUDED['se_resolvieron_antes']} se resolvieron "
+          f"antes de su fecha programada y quedan fuera; se toman {min(MAX_MARKETS, len(pool))} al azar", flush=True)
     return random.Random(seed).sample(pool, min(MAX_MARKETS, len(pool)))
+
+
+EXCLUDED = {"se_resolvieron_antes": 0, "historial_corto": 0}
+_LOCK = threading.Lock()
+
+
+def _short():
+    with _LOCK:
+        EXCLUDED["historial_corto"] += 1
 
 
 def history(token: str):
@@ -137,11 +166,13 @@ def snapshot(m):
     except Exception:
         return None
     if len(h) < HORIZON_DAYS + 1:
+        _short()
         return None
-    t_close = parse_time(m["cerro"])
+    t_close = parse_time(m["fin_programado"])
     t_snap = t_close - HORIZON_DAYS * 86400
     before = [p for p in h if p["t"] <= t_snap]
     if not before or h[0]["t"] > t_snap - 86400:
+        _short()
         return None
     return {**m, "precio_si": float(before[-1]["p"]), "t_foto": t_snap}
 
@@ -180,10 +211,12 @@ def analyze(rows):
         rets = [bet_return(p, w) for p, w, _ in bets]
         mean = sum(rets) / len(rets)
         sd = math.sqrt(sum((x - mean) ** 2 for x in rets) / max(1, len(rets) - 1))
+        half_width = 1.96 * sd / math.sqrt(len(rets)) if len(rets) > 1 else float("nan")
         return {
             "apuestas": len(bets), "ganadas": wins, "esperadas_por_precio": expected,
             "z_victorias": (wins - expected) / math.sqrt(var) if var > 0 else 0.0,
             "rend_promedio": mean, "rend_desv": sd,
+            "ic95_rend": [mean - half_width, mean + half_width],
             "z_rendimiento": mean / (sd / math.sqrt(len(rets))) if sd > 0 else 0.0,
             "peor_racha_perdidas": _worst_streak([w for _, w, _ in sorted(bets, key=lambda b: b[2]["t_foto"])]),
         }
@@ -226,7 +259,17 @@ def main():
         "reglas": {"volumen_minimo": MIN_VOLUME, "desde": SINCE, "dias_antes_del_cierre": HORIZON_DAYS,
                    "favorito_entre": [FAV_LOW, FAV_HIGH], "tasa_comision": FEE_RATE, "spread": SPREAD},
         "mercados_con_foto": len(rows),
+        "excluidos": dict(EXCLUDED),
     })
+    f = result["favoritos"]
+    if f.get("apuestas"):
+        lo, hi = f["ic95_rend"]
+        verdict = ("sin evidencia de ventaja" if lo <= 0 <= hi else
+                   "ventaja" if lo > 0 else "pierde de forma consistente")
+        result["nota"] = (f"Comprar al favorito: {verdict} (rendimiento por apuesta entre {lo * 100:+.1f}% y "
+                          f"{hi * 100:+.1f}% con 95% de confianza). Foto a {HORIZON_DAYS} días de la fecha programada; "
+                          f"fuera {EXCLUDED['se_resolvieron_antes']} mercados resueltos antes de tiempo y "
+                          f"{EXCLUDED['historial_corto']} sin precio {HORIZON_DAYS} días antes (mercados más cortos o sin historial).")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     print("\nCalibración (precio del sí 7 días antes, contra cuántas veces ganó el sí):")
@@ -238,7 +281,10 @@ def main():
         if f.get("apuestas"):
             print(f"{k}: {f['apuestas']} apuestas, ganó {f['ganadas']} (el precio prometía {f['esperadas_por_precio']:.0f}), "
                   f"z={f['z_victorias']:+.2f}; rendimiento promedio {f['rend_promedio']*100:+.2f}% por apuesta "
-                  f"(z={f['z_rendimiento']:+.2f}); peor racha {f['peor_racha_perdidas']} pérdidas")
+                  f"(z={f['z_rendimiento']:+.2f}, IC95 {f['ic95_rend'][0]*100:+.1f}% a {f['ic95_rend'][1]*100:+.1f}%); "
+                  f"peor racha {f['peor_racha_perdidas']} pérdidas")
+    if result.get("nota"):
+        print("\n" + result["nota"])
     print(f"\nEscrito: {OUT}")
 
 

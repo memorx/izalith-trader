@@ -80,14 +80,21 @@ def load_crypto(symbol: str, timeframe: str = "1d", since: str = "2017-01-01",
 
     rows = []
     now_ms = ex.milliseconds()
-    while start < now_ms - step:
-        batch = ex.fetch_ohlcv(symbol, timeframe, since=start, limit=1000)
-        if not batch:
-            break
-        rows += batch
-        start = batch[-1][0] + step
-        if len(batch) < 1000:
-            break
+    try:
+        while start < now_ms - step:
+            batch = ex.fetch_ohlcv(symbol, timeframe, since=start, limit=1000)
+            if not batch:
+                break
+            rows += batch
+            start = batch[-1][0] + step
+            if len(batch) < 1000:
+                break
+    except Exception as e:
+        if cached is None or not len(cached):
+            raise
+        # Sin red: se usa lo guardado (quien lo use ve la fecha de la última vela y decide si sirve)
+        logger.warning(f"No se pudo actualizar {symbol} ({e}); se usa el caché hasta {cached.index[-1]:%Y-%m-%d}")
+        rows = []
 
     if rows:
         new = pd.DataFrame(rows, columns=["timestamp", "open", "high", "low", "close", "volume"])
@@ -108,12 +115,15 @@ def load_crypto(symbol: str, timeframe: str = "1d", since: str = "2017-01-01",
 
 
 def load_crypto_closes(symbols: List[str], timeframe: str = "1d",
-                       since: str = "2017-01-01") -> pd.DataFrame:
-    """Cierres de varios símbolos alineados en un solo DataFrame."""
+                       since: str = "2017-01-01", refresh: bool = True) -> pd.DataFrame:
+    """
+    Cierres de varios símbolos alineados en un solo DataFrame. Un símbolo sin datos (ni en caché)
+    se omite con aviso: el allocator compara el universo contra el anterior antes de operar.
+    """
     closes = {}
     for s in symbols:
         try:
-            df = load_crypto(s, timeframe, since)
+            df = load_crypto(s, timeframe, since, refresh=refresh)
             if len(df):
                 closes[s] = df["close"]
         except Exception as e:

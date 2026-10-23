@@ -2,7 +2,7 @@
 Izalith Trading System - ¿Qué queda con una cuenta chica?
 
 Corre las estrategias que el bot puede operar en vivo (portafolio, sin perpetuos) con
-los costos reales de cada plataforma y con cuentas de 200, 1,000 y 5,000 dólares.
+los costos reales de cada plataforma y con cuentas de 100, 200, 1,000 y 5,000 dólares.
 
 Con poco capital pesan dos cosas que el backtest normal no ve:
 - la comisión mínima por orden (IBKR cobra al menos 1 dólar por orden de acciones)
@@ -13,7 +13,11 @@ Comisiones del nivel de entrada, verificadas el 22 oct 2026:
 - Binance: 0.10% (sólo para residentes de México; no opera en Canadá)
 - Bitso, pares USD/USDT: 0.30% / 0.36%
 - NDAX: 0.20% fija (sólo Canadá)
-- IBKR Pro Fixed: 0.005 USD por acción, mínimo 1 USD por orden
+- IBKR Pro Fixed: 0.005 USD por acción, mínimo 1 USD por orden (el tope de 1% del monto no se
+  modela: en órdenes de menos de 100 USD el costo real es algo menor que el de aquí)
+
+Órdenes límite en Kraken: no todas se llenan esperando. Se supone que 70% se llena como maker
+(0.40%) y el 30% restante termina a mercado (0.80%): 0.52% por lado.
 
 Uso:
     python -m lab.small_account
@@ -34,11 +38,12 @@ OUT = Path(__file__).parent.parent / "data" / "lab" / "small_account.json"
 
 CRYPTO = ["cash_plus_btc", "trend_btc", "trend_voltarget", "xs_momentum"]
 ETF = ["etf_60_40", "faber_trend", "dual_momentum", "rsi2_spy"]
-CAPITALS = [200, 1000, 5000]
+CAPITALS = [100, 200, 1000, 5000]
+KRAKEN_LIMIT_BLEND = 0.7 * 0.004 + 0.3 * 0.008
 
 # Comisión por lado + deslizamiento. Las altcoins tienen libros más delgados.
 CRYPTO_VENUES = {
-    "kraken_limite": ("Kraken Pro, órdenes límite", "MX y CA", Costs(0.004, 0.0002), 5.0),
+    "kraken_limite": ("Kraken Pro, órdenes límite (70% maker)", "MX y CA", Costs(KRAKEN_LIMIT_BLEND, 0.0002), 5.0),
     "kraken_mercado": ("Kraken Pro, órdenes a mercado", "MX y CA", Costs(0.008, 0.0005), 5.0),
     "bitso_usdt": ("Bitso, pares en USDT", "MX", Costs(0.0036, 0.0005), 5.0),
     "ndax": ("NDAX", "CA", Costs(0.002, 0.0005), 5.0),

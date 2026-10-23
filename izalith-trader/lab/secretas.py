@@ -220,7 +220,10 @@ def _with_filter(ctx: Ctx, base_key: str, risk_on: pd.Series) -> Output:
         "target": (base.extra.get("target") or {}) if now_on else {},
         "target_date": max(base.extra.get("target_date") or "", last_flip),
         "perp_cols": base.extra.get("perp_cols") or [],
+        "universe": base.extra.get("universe") or [],
+        "asset_ends": base.extra.get("asset_ends") or {},
         "filtro_activo": not now_on,
+        "sesgo_seleccion": bool(base.extra.get("sesgo_seleccion")),
     })
     if base.extra.get("aviso"):
         out.extra["aviso"] = base.extra["aviso"]

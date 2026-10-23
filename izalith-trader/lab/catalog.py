@@ -82,7 +82,7 @@ class Ctx:
 
     def crypto_close(self, symbols: List[str]) -> pd.DataFrame:
         return self._get(("cc", tuple(symbols)),
-                         lambda: D.load_crypto_closes(symbols, "1d", self.crypto_since))
+                         lambda: D.load_crypto_closes(symbols, "1d", self.crypto_since, refresh=self.refresh))
 
     def crypto_df(self, symbol: str, timeframe: str, since: str) -> pd.DataFrame:
         return self._get(("cdf", symbol, timeframe, since),
@@ -130,9 +130,15 @@ def on_change(targets: pd.DataFrame) -> pd.DataFrame:
 
 
 def every(frame, rule: str) -> pd.Series:
-    """Máscara de la primera barra de cada periodo `rule` (p. ej. 'W-MON' semanal, 'MS' mensual)."""
+    """
+    Máscara de la primera barra de cada periodo `rule` (p. ej. 'W-MON' = cada lunes, 'MS' mensual).
+
+    closed/label a la izquierda: con el default de pandas, 'W-MON' arma semanas de martes a lunes
+    y la "primera barra" salía en martes.
+    """
     idx = frame.index
-    pos = pd.Series(np.arange(len(idx)), index=idx).resample(rule).first().dropna().astype(int)
+    pos = (pd.Series(np.arange(len(idx)), index=idx)
+           .resample(rule, closed="left", label="left").first().dropna().astype(int))
     mask = np.zeros(len(idx), dtype=bool)
     mask[pos.to_numpy()] = True
     return pd.Series(mask, index=idx)
@@ -185,6 +191,10 @@ def _weights_output(ctx: Ctx, prices, targets, costs, bench_col, bench_name="", 
                          "target": {k: float(v) for k, v in target_row.items() if abs(v) > 1e-9},
                          "target_date": decided.index[-1].isoformat() if len(decided) else None,
                          "data_end": prices.index[-1].isoformat(),
+                         # Para el allocator: con qué activos decidió y hasta qué día tenía datos de cada uno
+                         "universe": [str(c) for c in prices.columns],
+                         "asset_ends": {str(c): prices[c].last_valid_index().isoformat()
+                                        for c in prices.columns if prices[c].last_valid_index() is not None},
                          "perp_cols": list(kw.get("perp_cols") or [])})
 
 
@@ -766,12 +776,20 @@ def s_combo(ctx: Ctx, componentes="verdes", metodo="inverso_vol", vol_window=252
             target[sym] = target.get(sym, 0.0) + float(last_w[k]) * w
         if o.extra.get("target_date"):
             dates.append(o.extra["target_date"])
+    universe, ends = set(), {}
+    for o in outs.values():
+        universe |= set(o.extra.get("universe") or [])
+        for a, e in (o.extra.get("asset_ends") or {}).items():
+            ends[a] = min(ends.get(a, e), e)
     res_out.extra.update({
         "target": {s: w for s, w in target.items() if abs(w) > 1e-9},
         "target_date": max(dates),
+        "universe": sorted(universe),
+        "asset_ends": ends,
         "pesos_piezas": {k: round(float(v), 4) for k, v in last_w.items()},
         "perp_cols": [],
         "aviso": "Las piezas se eligieron por haber salido verdes: el resultado combinado hereda ese optimismo.",
+        "sesgo_seleccion": True,
     })
     return res_out
 
