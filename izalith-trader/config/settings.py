@@ -250,6 +250,11 @@ class Settings:
     def all_paper(self) -> bool:
         return not self.live_markets
 
+    @property
+    def db_path(self) -> Path:
+        """Papel y real nunca en la misma base: la historia de práctica no se mezcla con dinero de verdad."""
+        return self.data_dir / ("izalith.db" if self.all_paper else "izalith_real.db")
+
     def is_module_active(self, module: str) -> bool:
         """Check if a module is active."""
         return module.lower() in [m.lower() for m in self.active_modules]
