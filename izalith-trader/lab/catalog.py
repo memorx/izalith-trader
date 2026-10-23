@@ -782,11 +782,11 @@ CATALOG.extend([
          "Junta las 7 estrategias verdes que el bot puede operar, cada una con más o menos capital según su riesgo, y rebalancea cada mes: no depende de que un solo mercado vaya bien.",
          "Si todos los mercados caen a la vez (2022) caen juntas; más piezas = más órdenes y más comisiones.", 2000, "Mensual",
          s_combo, {"componentes": "verdes"}, {"metodo": ["iguales"], "vol_window": [126, 504]},
-         datos="Las 7 estrategias del catálogo, desde 2018"),
+         datos="Las 7 estrategias del catálogo, desde 2017"),
     Spec("combo_chico", "Portafolio chico: cripto + S&P 500", 2, "Cripto y acciones EE.UU.",
          "Kraken (cripto) + IBKR (SPY)",
          "Dos piezas que casi no se parecen: la tendencia BTC+ETH con volatilidad controlada y la tendencia del S&P 500, con capital según su riesgo. Pensado para empezar con poco.",
          "Las dos pueden caer juntas en un pánico general; con 200 dólares la comisión mínima de IBKR pesa.", 200, "Mensual",
          s_combo, {"componentes": "chico"}, {"metodo": ["iguales"], "vol_window": [126, 504]},
-         datos="Tendencia BTC+ETH y Faber, desde 2018"),
+         datos="Tendencia BTC+ETH y Faber, desde 2017"),
 ])
