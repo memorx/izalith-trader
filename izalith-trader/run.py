@@ -421,7 +421,10 @@ class IzalithSystem:
             except Exception:
                 pass
         if self.db:
-            await self.db.disconnect()
+            try:
+                await self.db.disconnect()
+            except Exception as e:
+                logger.warning(f"No se pudo cerrar la base limpio: {e}")
         logger.info("System stopped. Goodbye!")
 
 
@@ -464,20 +467,30 @@ async def main():
         except (NotImplementedError, RuntimeError):
             pass  # Windows: Ctrl+C llega como KeyboardInterrupt / CancelledError
 
+    exit_code = 0
     try:
         if await system.initialize():
             await system.run()
+        else:
+            exit_code = 1      # no arrancó (falta una llave de real, base, etc.)
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
     except Exception as e:
         logger.error(f"Fatal error: {e}")
+        exit_code = 1
     finally:
-        await system.stop()
-        # El apagado ya cerró la base y los adaptadores. Algún hilo de red (yfinance, ccxt) puede
-        # tardar minutos en soltar y asyncio.run lo esperaría con el proceso colgado: se sale ya.
-        logging.shutdown()
-        lock.close()
-        os._exit(0)
+        try:
+            await system.stop()
+        except BaseException as e:
+            # Un segundo Ctrl+C o un error al cerrar la base: igual se sale, sin dejar el proceso colgado
+            logger.error(f"El apagado no terminó completo: {e!r}")
+            exit_code = exit_code or 1
+        finally:
+            # El apagado ya cerró la base y los adaptadores. Algún hilo de red (yfinance, ccxt) puede
+            # tardar minutos en soltar y asyncio.run lo esperaría con el proceso colgado: se sale ya.
+            logging.shutdown()
+            lock.close()
+            os._exit(exit_code)
 
 
 if __name__ == "__main__":

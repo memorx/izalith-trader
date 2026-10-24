@@ -11,10 +11,11 @@
 *(Esta sección se reescribe completa en cada actualización.)*
 
 **Hecho y funcionando**
-- Laboratorio (`lab/`): 45 estrategias, evaluadas con `python -m lab.review` (corrida del 24/10).
-  - 9 en verde: 60/40, efectivo + 10% BTC, DCA S&P, Faber, momentum dual, RSI-2, tendencia BTC, tendencia BTC+ETH con volatilidad controlada y Faber con el efectivo en BIL.
-  - En amarillo: los combinados (sesgo de selección), el DCA de BTC (-83%) y las ideas nuevas de Fable.
-  - Las 15 inventadas: ninguna pasa "no fue suerte" (contando 112 variantes probadas).
+- Laboratorio (`lab/`): 52 estrategias, evaluadas con `python -m lab.review` (corrida del 24/10, ronda 2).
+  - 12 en verde. Las 9 de antes más tres nuevas: la tendencia BTC+ETH con banda (por la clase "ejecución"), la banda con ajuste a medio camino y la paridad de riesgo SPY/IEF/GLD.
+  - En amarillo: los combinados (incluido el que elige sus piezas sin ver el futuro), el DCA de BTC (-83%) y las ideas inventadas.
+  - Las 17 inventadas: ninguna pasa "no fue suerte".
+  - Clase "ejecución" (`lab/review.py`): misma señal, distinta forma de operarla. Hereda el semáforo de su base si rinde igual antes de costos, cuesta menos y no cae más.
 - **Ideas de Fable del 24/10** (`docs/IDEAS-2026-10-24.md`, `lab/ideas_fable.py`), con merge en el PR #3:
   - La mejor es la banda en la tendencia BTC+ETH: 27 órdenes al año contra 40. Lo esperable son **+1.2 a 1.5 puntos** netos en Kraken. El 20.6% contra 18.0% del backtest incluye ruido de muestra; fuera de muestra empatan.
   - BTC + oro y Faber + oro + bonos caen la mitad, pero rinden menos.
@@ -25,11 +26,15 @@
 - Comisión de Kraken Pro verificada el 24/10 en su página oficial: 0.40% maker / 0.80% taker hasta $2,500 al mes.
 - Cuenta chica (`python -m lab.small_account`): 100, 200, 1,000 y 5,000 dólares, ahora también con el efectivo ocioso al 0% como en la cuenta real.
 - Estudio de Polymarket (`python -m lab.polymarket_study`): comprar al favorito no tiene ventaja (entre -6.1% y +2.7% por apuesta, 95% de confianza).
-- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 130 pruebas pasan (`pytest tests/`).
+- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 132 pruebas pasan (`pytest tests/`).
 - Arranque automático al iniciar sesión (carpeta Inicio de Windows); `tools/detener.bat` lo apaga en orden.
-- Corrida en papel de Memo: `.env` con `DRY_RUN=true`, Kraken, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una; base `data/izalith.db`.
-  - Reiniciada con `master` el 23/10 cerca de las 16:00 (hora de México). Corre oculta con `tools/arrancar_oculto.vbs`, igual que el arranque automático; el log va a `logs/bot_consola.log`.
-  - Al arrancar: modo papel, 3 posiciones abiertas, sin alertas ni errores. El mes de papel cuenta desde aquí.
+- Corrida en papel de Memo: `.env` con `DRY_RUN=true`, Kraken, `PAPER_CASH_USD=200`, **fab_vt_banda** (tendencia BTC+ETH con banda) y faber_trend con $100 cada una; base `data/izalith.db`.
+  - Corre oculta con `tools/arrancar_oculto.vbs`, igual que el arranque automático; el log va a `logs/bot_consola.log`. El mes de papel cuenta desde el 23/10.
+  - **24/10:** Memo aprobó pasar el papel a la versión con banda.
+    - Las 2 posiciones, 45 fotos y 2 órdenes de `alloc:trend_voltarget` se renombraron a `alloc:fab_vt_banda`, en vez de vender y volver a comprar.
+    - Respaldo previo: `data/izalith_antes_banda_2026-10-24.db`.
+    - Se reinició con `master` (`9b2ae24`).
+- **healthchecks.io (24/10):** check "Izalith Trader" en el proyecto de Memo: latido cada 5 min, 10 min de gracia, aviso por correo. La URL de ping va en `HEALTHCHECK_URL` del `.env`.
 - PR #1 aprobado por Fable en la tercera revisión y con merge a `master` el 23/10 (merge commit `9701b39`): https://github.com/memorx/izalith-trader/pull/1.
 - **Telegram conectado (23/10):** bot `@izalith_memo_bot`, creado desde la sesión de Telegram Web de Memo con BotFather. El token y el chat van en el `.env`. Mensaje de prueba recibido. Llegan el resumen diario a las 21:00, las alertas y unas 12 señales al día; para quitar las señales, se saca `signals` de `ACTIVE_MODULES`.
 
@@ -40,13 +45,39 @@
 - **Adaptador de perpetuos (Binance USD-M / Hyperliquid):** no existe. Sin él, el carry y las estrategias con cortos no corren en vivo.
 - **IBKR y Kraken en real:** los dos adaptadores sólo están probados contra versiones falsas. Falta una prueba con la cuenta de papel de IBKR (puerto 4002) y una orden chica en Kraken.
 - **Recolectores:** guardan historial por hora (tabla `kv`, llaves `collect:AAAA-MM-DDTHH`); faltan semanas de datos para hacer backtest de los mercados en investigación.
-- **Pendiente de Memo:** crear la cuenta de healthchecks.io y su check (aviso por correo si el bot se cae). Claude no crea cuentas nuevas.
+- **Pendientes de la ronda 2:** netear órdenes entre bolsas (N3), aportación que rebalancea (N4), analizar el spread de Kraken por hora a partir del 21/11 (N6), y recompensas de Kraken en la pestaña "Earn" cuando Memo tenga cuenta.
 
 **Bloqueado**
 - **Residencia fiscal de Memo:** pasa unos seis meses en México y seis en Canadá. La decide el tratado y la confirma su contador; pendiente desde el 22/10/2026. Mientras tanto se eligieron plataformas que sirven en los dos países (Kraken Pro + IBKR).
 
 **Siguiente paso**
-- Que Fable revise el PR de las ideas del 24/10. Después, que Memo decida si el papel cambia la tendencia BTC+ETH por la versión con banda. El papel corre hasta el 23/11/2026.
+- Dejar correr el papel (banda + Faber) hasta el 23/11/2026 y comparar contra el laboratorio en la pestaña "En vivo".
+
+---
+
+## 24/10/2026 (tarde) — Ronda 2: la banda pasa a verde y comprar cada mes le gana a cada semana
+
+**Qué cambió**
+- Memo: "si sigamos con este dry y run y hagamos más ideas que tengan tú y fable". Fable revisó las reglas ANTES de correr y corrigió 4. La más importante: el combinado tampoco podía elegir sus piezas de entre las 7 que hoy sabemos que salieron verdes.
+- **Clase "ejecución"** en el semáforo. Con ella, la banda pasa a **verde**: rinde igual antes de costos (brecha fuera de muestra de -0.11 puntos, p 0.22) y cuesta menos.
+- Resultados, netos con $200:
+
+  | Idea | Neto | Semáforo |
+  |---|---|---|
+  | Banda con ajuste a medio camino | 20.9% | Verde (empate con la banda) |
+  | Banda con volatilidad EWMA | 20.4% | Amarillo (muere) |
+  | BTC + oro con banda (mía) | 13.3% | Amarillo |
+  | Paridad de riesgo | 5.8% | Verde |
+  | Combinado sin sesgo | 8.8% en el lab, Sharpe 1.20 fuera de muestra | Amarillo |
+  | BTC por votación | 26.9%, -53% | Muere: 16.6 órdenes al año contra 7.1 |
+  | Tendencia BTC con freno | 12.7% | Muere |
+
+- **Frecuencia del DCA en IBKR:** con $100 al mes, mensual da 15.6% de TIR y semanal 14.8% ($106 de comisiones contra $459).
+- Ya corregidos los dos detalles del apagado (try/finally y código de salida 1). El recolector guarda el spread de Kraken por hora.
+
+**Decisiones y descartes**
+- El papel sigue con la banda simple: la de medio camino da +0.3 puntos, dentro del ruido, y no vale la pena cambiar.
+- El combinado sin sesgo elige desde 2021 la rotación cripto, que arrastra sesgo de supervivencia. Su buen fuera de muestra no se toma como prueba.
 
 ---
 

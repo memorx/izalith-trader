@@ -1,6 +1,6 @@
 # Estrategias: revisión con datos reales
 
-Generado: 2026-10-24 16:49 UTC. Todos los números son **después de comisiones y deslizamiento**.
+Generado: 2026-10-24 20:30 UTC. Todos los números son **después de comisiones y deslizamiento**.
 Se usan los parámetros de libro, sin optimizar. 'Efectivo' es el T-bill de EE.UU. a 3 meses.
 
 Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.
@@ -44,12 +44,19 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 | 🟡 | Freno por curva invertida (inventada) | Moderada | +8.7% | +2.4% | -21% | 0.55 | +7.5% | +11.1% / -55% |
 | 🟡 | Freno por stablecoins (inventada) | Moderada | +17.7% | +2.6% | -23% | 0.91 | +12.4% | +27.0% / -83% |
 | 🔴 | Freno por pánico en opciones (inventada) | Moderada | +6.6% | +3.4% | -21% | 0.28 | +8.5% | +8.2% / -77% |
-| 🟡 | Tendencia BTC+ETH con banda (idea de Fable) | Agresiva | +23.8% | +2.6% | -23% | 1.00 | +12.7% | +37.8% / -83% |
+| 🟢 | Tendencia BTC+ETH con banda (idea de Fable) | Agresiva | +23.8% | +2.6% | -23% | 1.00 | +12.7% | +37.8% / -83% |
 | 🟢 | Faber con el efectivo en T-bills (idea de Fable) | Moderada | +8.3% | +1.5% | -25% | 0.59 | +9.5% | +10.6% / -55% |
 | 🟡 | BTC y oro en tendencia (idea de Fable) | Agresiva | +15.7% | +2.6% | -15% | 1.00 | +17.4% | +37.8% / -83% |
 | 🟡 | Faber con oro y bonos (idea de Fable) | Moderada | +6.8% | +1.8% | -11% | 0.72 | +6.8% | +10.8% / -55% |
 | 🟡 | Faber con volatilidad manejada (idea de Fable) | Moderada | +8.8% | +2.4% | -16% | 0.63 | +8.3% | +11.1% / -55% |
 | 🟡 | Rotación cripto sin ver el futuro (idea de Fable) | Especulativa | +75.8% | +2.6% | -67% | 1.09 | +36.0% | +37.8% / -83% |
+| 🟡 | Tendencia BTC+ETH con banda y vol suavizada (idea de Fable) | Agresiva | +23.4% | +2.6% | -23% | 0.96 | +9.8% | +37.8% / -83% |
+| 🟢 | Tendencia BTC+ETH con banda y ajuste a medio camino (idea de Fable) | Agresiva | +24.0% | +2.6% | -23% | 0.99 | +13.5% | +37.8% / -83% |
+| 🟡 | BTC y oro con banda (idea de Claude) | Agresiva | +17.8% | +2.6% | -15% | 1.09 | +19.2% | +37.8% / -83% |
+| 🟢 | Paridad de riesgo acciones, bonos y oro | Conservadora | +7.0% | +1.8% | -17% | 0.79 | +6.2% | +10.8% / -55% |
+| 🟡 | Combinado sin sesgo de selección (idea de Fable) | Moderada | +8.8% | +2.7% | -17% | 0.69 | +15.1% | +17.0% / -34% |
+| 🟡 | BTC por votación de plazos (idea de Fable) | Agresiva | +29.2% | +2.6% | -52% | 0.79 | +27.9% | +37.8% / -83% |
+| 🟡 | Tendencia BTC con freno por caída (idea de Fable) | Agresiva | +14.8% | +2.6% | -48% | 0.51 | +13.4% | +37.8% / -83% |
 | 🟡 | Portafolio de las 7 verdes | Moderada | +11.0% | +2.6% | -15% | 1.03 | +12.8% | +15.0% / -34% |
 | 🟡 | Portafolio chico: cripto + S&P 500 | Moderada | +15.5% | +2.6% | -23% | 1.05 | +14.2% | +15.0% / -34% |
 
@@ -460,7 +467,7 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 - **Rendimiento anual:** +6.6% · **caída máxima:** -21% · **peor año:** -16% · **meses positivos:** 26%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ❌ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
 
-### 🟡 Tendencia BTC+ETH con banda (idea de Fable) (Agresiva)
+### 🟢 Tendencia BTC+ETH con banda (idea de Fable) (Agresiva)
 
 - **Cómo gana:** La misma tendencia con volatilidad controlada, pero sólo se mueve si el peso cambia más de 10 puntos o cambia la tendencia: menos órdenes, menos comisión.
 - **Riesgos:** Se queda más tiempo con un tamaño que ya no es el ideal.
@@ -469,7 +476,7 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 - **Datos:** BTC y ETH (Binance) desde 2017
 - **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
 - **Rendimiento anual:** +23.8% · **caída máxima:** -23% · **peor año:** -14% · **meses positivos:** 40%
-- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ✅ misma señal, menos costo
 
 ### 🟢 Faber con el efectivo en T-bills (idea de Fable) (Moderada)
 
@@ -527,6 +534,85 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 - **Rendimiento anual:** +75.8% · **caída máxima:** -67% · **peor año:** -32% · **meses positivos:** 38%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
 - **Ojo:** Sesgo de supervivencia sustancial en 2017-2019: las 48 candidatas se eligieron sabiendo cuáles sobrevivieron y cuáles crecieron; las que murieron (LUNA, FTT, NANO...) no están. El rendimiento es una cota superior, no una estimación.
+
+### 🟡 Tendencia BTC+ETH con banda y vol suavizada (idea de Fable) (Agresiva)
+
+- **Cómo gana:** La versión con banda, pero midiendo la volatilidad con un promedio exponencial: el tamaño salta menos y se opera menos.
+- **Riesgos:** Reacciona un poco más lento a un cambio real de volatilidad.
+- **Dónde se opera:** Kraken / Binance (sólo spot)
+- **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Semanal
+- **Datos:** BTC y ETH (Binance) desde 2017
+- **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
+- **Rendimiento anual:** +23.4% · **caída máxima:** -23% · **peor año:** -14% · **meses positivos:** 38%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ misma señal, menos costo
+
+### 🟢 Tendencia BTC+ETH con banda y ajuste a medio camino (idea de Fable) (Agresiva)
+
+- **Cómo gana:** La versión con banda, pero cuando hay que ajustar el tamaño sólo se mueve la mitad del camino (en un cambio de tendencia, completo).
+- **Riesgos:** Se queda más tiempo lejos del tamaño ideal.
+- **Dónde se opera:** Kraken / Binance (sólo spot)
+- **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Semanal
+- **Datos:** BTC y ETH (Binance) desde 2017
+- **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
+- **Rendimiento anual:** +24.0% · **caída máxima:** -23% · **peor año:** -14% · **meses positivos:** 39%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ✅ misma señal, menos costo
+
+### 🟡 BTC y oro con banda (idea de Claude) (Agresiva)
+
+- **Cómo gana:** BTC y oro en tendencia, pero sólo se mueve si el peso cambia más de 10 puntos o cambia la tendencia: menos comisión.
+- **Riesgos:** Se queda más tiempo con un tamaño que ya no es el ideal; el oro tokenizado depende de Paxos.
+- **Dónde se opera:** Kraken (BTC y PAXG)
+- **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Semanal
+- **Datos:** BTC (Binance) + PAXG desde 2020 y GLD antes
+- **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
+- **Rendimiento anual:** +17.8% · **caída máxima:** -15% · **peor año:** -7% · **meses positivos:** 49%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ misma señal, menos costo
+- **Ojo:** Antes de 2020 el oro es GLD (Yahoo) como sustituto de PAXG.
+
+### 🟢 Paridad de riesgo acciones, bonos y oro (Conservadora)
+
+- **Cómo gana:** Cada activo aporta el mismo riesgo: el que se mueve menos recibe más capital (Qian, 2005). Para la parte tranquila del portafolio.
+- **Riesgos:** Bonos y acciones pueden caer juntos (2022); rinde poco.
+- **Dónde se opera:** IBKR
+- **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Mensual
+- **Datos:** SPY, IEF y GLD (Yahoo) desde 2004
+- **Periodo:** 2004-11-18 a 2026-10-23 (21.93 años)
+- **Rendimiento anual:** +7.0% · **caída máxima:** -17% · **peor año:** -12% · **meses positivos:** 64%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
+
+### 🟡 Combinado sin sesgo de selección (idea de Fable) (Moderada)
+
+- **Cómo gana:** Cada año entran sólo las estrategias que pasaban el semáforo con los datos de ese momento, con capital según su riesgo.
+- **Riesgos:** Una pieza puede entrar justo antes de su peor año.
+- **Dónde se opera:** Kraken (cripto) + IBKR (ETFs): en real no, cada cuenta tiene su efectivo
+- **Capital mínimo sugerido:** 500 USD · **Frecuencia:** Mensual
+- **Datos:** Estrategias de libro sin perpetuos; piezas elegidas cada año desde 2019
+- **Periodo:** 2019-01-01 a 2026-10-23 (7.81 años)
+- **Rendimiento anual:** +8.8% · **caída máxima:** -17% · **peor año:** -8% · **meses positivos:** 67%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
+- **Ojo:** Piezas elegidas cada año con datos sólo hasta esa fecha, con un semáforo simplificado (sin ejecutar tarde ni vecinos).
+
+### 🟡 BTC por votación de plazos (idea de Fable) (Agresiva)
+
+- **Cómo gana:** BTC con la fracción de plazos (1, 3, 6 y 12 meses) que van al alza: la misma tendencia sin depender de un solo promedio.
+- **Riesgos:** Se queda a medias en cambios de tendencia rápidos.
+- **Dónde se opera:** Kraken / Binance (sólo spot)
+- **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Semanal
+- **Datos:** BTC (Binance) desde 2017
+- **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
+- **Rendimiento anual:** +29.2% · **caída máxima:** -52% · **peor año:** -23% · **meses positivos:** 42%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
+
+### 🟡 Tendencia BTC con freno por caída (idea de Fable) (Agresiva)
+
+- **Cómo gana:** La tendencia BTC de 200 días, pero a la mitad mientras la estrategia esté más de 25% abajo de su máximo.
+- **Riesgos:** Puede quedarse a la mitad justo en el rebote.
+- **Dónde se opera:** Kraken / Binance (sólo spot)
+- **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Diaria
+- **Datos:** BTC (Binance) desde 2017
+- **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
+- **Rendimiento anual:** +14.8% · **caída máxima:** -48% · **peor año:** -31% · **meses positivos:** 32%
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
 
 ### 🟡 Portafolio de las 7 verdes (Moderada)
 
