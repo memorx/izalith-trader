@@ -103,8 +103,11 @@ def s_btc_oro(ctx: Ctx, sma=100, target_vol=0.25, vol_window=30) -> Output:
     weekly = every(w, "W-MON")
     t = w.copy()
     t[~(flips | weekly)] = np.nan
-    out = _weights_output(ctx, px, t, ctx.cost("binance_spot"), "BTC/USDT", min_trade=0.02)
-    out.extra["aviso"] = "Antes de 2020 el oro es GLD (Yahoo) como sustituto de PAXG."
+    # PAXG tiene el libro delgado: se le cobra el deslizamiento de una altcoin (revisión de Fable, 24 oct)
+    costs = {"BTC/USDT": ctx.cost("binance_spot"), "PAXG/USDT": ctx.cost("altcoin_spot")}
+    out = _weights_output(ctx, px, t, costs, "BTC/USDT", min_trade=0.02)
+    out.extra["aviso"] = ("Antes de 2020 el oro es GLD (Yahoo) como sustituto de PAXG. La idea del oro se "
+                          "propuso conociendo su racha de 2019-2025: por eso es inventada.")
     return out
 
 
@@ -200,8 +203,9 @@ def s_xs_pit(ctx: Ctx, lookback=28, top=3, regime_sma=100, universe_size=20, min
                 row[sym] = 1.0 / top
         t.loc[ts] = row
     out = _weights_output(ctx, px, t, ctx.cost("altcoin_spot"), "BTC/USDT")
-    out.extra["aviso"] = ("Sesgo de supervivencia (menor): las monedas que dejaron de existir "
-                          "(LUNA, FTT...) no tienen datos gratis y no están.")
+    out.extra["aviso"] = ("Sesgo de supervivencia sustancial en 2017-2019: las 48 candidatas se eligieron "
+                          "sabiendo cuáles sobrevivieron y cuáles crecieron; las que murieron (LUNA, FTT, NANO...) "
+                          "no están. El rendimiento es una cota superior, no una estimación.")
     return out
 
 

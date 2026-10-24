@@ -13,6 +13,9 @@ cambia el resultado es cuánto se le suma cada mes. Aquí se simula una cuenta q
 Periodo común: desde enero de 2018 (lo que permiten los datos de cripto). Es historia, no
 pronóstico: 2018-2026 incluye un mercado alcista fuerte de acciones y dos ciclos de cripto.
 
+Los mínimos por orden se calculan con una cuenta de 1,000 dólares aunque la simulación empieza
+en 200: las filas de IBKR salen un poco optimistas los primeros años (revisión de Fable).
+
 Uso:
     python -m lab.aportaciones
 Escribe data/lab/aportaciones.json.
