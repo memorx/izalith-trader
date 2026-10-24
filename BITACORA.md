@@ -66,9 +66,9 @@
   |---|---|---|
   | Banda con ajuste a medio camino | 20.9% | Verde (empate con la banda) |
   | Banda con volatilidad EWMA | 20.4% | Amarillo (muere) |
-  | BTC + oro con banda (mía) | 13.3% | Amarillo |
+  | BTC + oro con banda (mía) | 13.3% | Amarillo (reclasificada a inventada: 47% de suerte) |
   | Paridad de riesgo | 5.8% | Verde |
-  | Combinado sin sesgo | 8.8% en el lab, Sharpe 1.20 fuera de muestra | Amarillo |
+  | Combinado sin sesgo | 8.8% en el lab, Sharpe 1.20 fuera de muestra | Rojo (casi no filtra y hereda sesgo de 5 piezas) |
   | BTC por votación | 26.9%, -53% | Muere: 16.6 órdenes al año contra 7.1 |
   | Tendencia BTC con freno | 12.7% | Muere |
 
@@ -78,6 +78,11 @@
 **Decisiones y descartes**
 - El papel sigue con la banda simple: la de medio camino da +0.3 puntos, dentro del ruido, y no vale la pena cambiar.
 - El combinado sin sesgo elige desde 2021 la rotación cripto, que arrastra sesgo de supervivencia. Su buen fuera de muestra no se toma como prueba.
+- Revisión de Fable (PR #5, con merge):
+  - el spread de Kraken no se estaba guardando; ya se guarda;
+  - una "ejecución" que rinde distinto a su base se trata como inventada;
+  - el combinado hereda el sesgo de sus piezas y queda en rojo.
+- Memo pidió un ícono en el escritorio: "Izalith Trader" abre el panel y, si el bot está apagado, lo arranca (`tools/abrir_izalith.vbs`, `tools/izalith.ico`).
 
 ---
 
