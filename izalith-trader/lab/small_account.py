@@ -12,6 +12,9 @@ Comisiones del nivel de entrada, verificadas el 22 oct 2026:
 - Kraken Pro: 0.40% si la orden espera (límite) y 0.80% si toma precio (mercado)
 - Binance: 0.10% (sólo para residentes de México; no opera en Canadá)
 - Bitso, pares USD/USDT: 0.30% / 0.36%
+- "Efectivo al 0%": en la cuenta real el efectivo ocioso no gana nada (Kraken 0%, IBKR 0% con
+  menos de 10 mil dólares), así que también se reporta el rendimiento sin el T-bill que el
+  laboratorio le paga al efectivo.
 - NDAX: 0.20% fija (sólo Canadá)
 - IBKR Pro Fixed: 0.005 USD por acción, mínimo 1 USD por orden (el tope de 1% del monto no se
   modela: en órdenes de menos de 100 USD el costo real es algo menor que el de aquí)
@@ -36,8 +39,8 @@ from lab.metrics import summarize
 
 OUT = Path(__file__).parent.parent / "data" / "lab" / "small_account.json"
 
-CRYPTO = ["cash_plus_btc", "trend_btc", "trend_voltarget", "xs_momentum"]
-ETF = ["etf_60_40", "faber_trend", "dual_momentum", "rsi2_spy"]
+CRYPTO = ["cash_plus_btc", "trend_btc", "trend_voltarget", "xs_momentum", "fab_vt_banda", "fab_btc_oro", "fab_xs_pit"]
+ETF = ["etf_60_40", "faber_trend", "dual_momentum", "rsi2_spy", "fab_faber_bil", "fab_gtaa3", "fab_faber_vol"]
 CAPITALS = [100, 200, 1000, 5000]
 KRAKEN_LIMIT_BLEND = 0.7 * 0.004 + 0.3 * 0.008
 
@@ -82,9 +85,10 @@ def main():
                 ctx = base.child(venue={"binance_spot": cost, "altcoin_spot": alt}, capital_usd=cap,
                                  min_order_usd=min_order)
                 r = run(key, ctx)
+                r0 = run(key, ctx.child(cash_zero=True))
                 rows.append({"estrategia": key, "nombre": spec.nombre, "nivel": spec.nivel, "lugar": vkey,
                              "lugar_nombre": vname, "pais": where, "capital": cap, **r,
-                             "cagr_laboratorio": lab["cagr"]})
+                             "cagr_efectivo_0": r0["cagr"], "cagr_laboratorio": lab["cagr"]})
         print(f"{spec.nombre}: listo", flush=True)
 
     vname, where, cost, min_fee, min_order = IBKR
@@ -94,8 +98,10 @@ def main():
         for cap in CAPITALS:
             ctx = base.child(venue={"us_etf": cost}, capital_usd=cap, min_fee_usd=min_fee, min_order_usd=min_order)
             r = run(key, ctx)
+            r0 = run(key, ctx.child(cash_zero=True))
             rows.append({"estrategia": key, "nombre": spec.nombre, "nivel": spec.nivel, "lugar": "ibkr",
-                         "lugar_nombre": vname, "pais": where, "capital": cap, **r, "cagr_laboratorio": lab["cagr"]})
+                         "lugar_nombre": vname, "pais": where, "capital": cap, **r,
+                         "cagr_efectivo_0": r0["cagr"], "cagr_laboratorio": lab["cagr"]})
         print(f"{spec.nombre}: listo", flush=True)
 
     def clean(o):
@@ -126,7 +132,9 @@ def main():
         vals = [x for x in rows if (x["estrategia"], x["lugar"]) == k]
         vals.sort(key=lambda x: x["capital"])
         cells = " ".join(f"{v['cagr'] * 100:+8.1f}%" for v in vals)
-        print(f"{r['nombre'][:44]:44} {r['lugar_nombre'][:32]:32} {cells}   {r['cagr_laboratorio'] * 100:+.1f}%")
+        zero = next((v["cagr_efectivo_0"] for v in vals if v["capital"] == 1000), None)
+        print(f"{r['nombre'][:44]:44} {r['lugar_nombre'][:32]:32} {cells}   {r['cagr_laboratorio'] * 100:+.1f}%"
+              f"   efectivo al 0%: {zero * 100:+.1f}%")
     print(f"\nEscrito: {OUT}")
 
 

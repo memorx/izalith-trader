@@ -22,7 +22,9 @@ Cuándo NO opera:
   IBKR): cada cuenta tiene su propio efectivo y la bolsa de la estrategia no puede moverlo.
 """
 import asyncio
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from core.adapters.base import BaseAdapter
@@ -34,6 +36,8 @@ from core.utils.logger import get_logger
 
 logger = get_logger("allocator")
 
+SMALL_ACCOUNT = Path(__file__).resolve().parents[2] / "data" / "lab" / "small_account.json"
+MAX_SIZE_DRAG = 0.015     # no correr una estrategia que con este capital pierda más de 1.5 puntos al año por su tamaño
 DRIFT_LIMIT = 0.10        # rebalancear si un activo se desvía más de 10% del capital de la bolsa
 MIN_TRADE_FRACTION = 0.02  # no mover menos del 2% de la bolsa
 STALE_DAYS = {"crypto": 3, "stock": 6, "forex": 4}
@@ -53,6 +57,7 @@ class AllocatorBot:
         self.dry_run = config.get("dry_run", True)
         # En cripto, órdenes límite que esperan: en Kraken la comisión baja de 0.80% a 0.40%
         self.passive = bool(config.get("allocator_passive_orders", True))
+        self.crypto_exchange = str(config.get("crypto_exchange", "binance")).lower()
         self.state: Dict[str, Dict] = {}
         self._running = False
 
@@ -72,10 +77,40 @@ class AllocatorBot:
             if spec.tipo != "weights" or spec.run is None:
                 logger.error(f"Allocator: '{key}' no es una estrategia de portafolio; no se puede correr aquí")
                 continue
-            valid.append(key)
             self.state[key] = {"nombre": spec.nombre, "nivel": spec.nivel, "capital": self.capital,
                                "status": "esperando primera revisión"}
+            drag = self.size_drag(key)
+            if drag is not None and drag > MAX_SIZE_DRAG:
+                msg = (f"no conviene con {self.capital:,.0f} USD: por los mínimos por orden pierde "
+                       f"{drag * 100:.1f} puntos al año contra una cuenta de 5,000 (lab/small_account.py)")
+                self.state[key].update(status="en pausa: " + msg)
+                logger.warning(f"Allocator: '{key}' {msg}")
+                continue
+            valid.append(key)
         return valid
+
+    def size_drag(self, key: str) -> Optional[float]:
+        """
+        Puntos al año que la estrategia pierde con este capital contra 5,000 dólares, en el lugar
+        donde se va a operar (lab/small_account.py). None si no está en ese análisis.
+        """
+        try:
+            rows = [r for r in json.loads(SMALL_ACCOUNT.read_text(encoding="utf-8"))["filas"] if r["estrategia"] == key]
+        except Exception:
+            return None
+        if not rows:
+            return None
+        venue = {"kraken": "kraken_limite" if self.passive else "kraken_mercado",
+                 "binance": "binance", "bitso": "bitso_usdt", "ndax": "ndax"}.get(self.crypto_exchange)
+        here = [r for r in rows if r["lugar"] == venue] or [r for r in rows if r["lugar"] == "ibkr"]
+        if not here:
+            return None
+        caps = sorted({r["capital"] for r in here})
+        cap = max([c for c in caps if c <= self.capital] or [caps[0]])
+        by_cap = {r["capital"]: r["cagr"] for r in here}
+        if cap not in by_cap or max(caps) not in by_cap or by_cap[cap] is None or by_cap[max(caps)] is None:
+            return None
+        return float(by_cap[max(caps)] - by_cap[cap])
 
     async def run(self) -> None:
         self.keys = self._validate()

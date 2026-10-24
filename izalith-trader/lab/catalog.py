@@ -43,7 +43,7 @@ class Ctx:
     def __init__(self, cost_mult: float = 1.0, lag: int = 1, crypto_since: str = "2017-08-01",
                  etf_since: str = "1995-01-01", refresh: bool = True,
                  venue: Optional[Dict[str, Costs]] = None, capital_usd: Optional[float] = None,
-                 min_fee_usd: float = 0.0, min_order_usd: float = 0.0):
+                 min_fee_usd: float = 0.0, min_order_usd: float = 0.0, cash_zero: bool = False):
         self.cost_mult = cost_mult
         self.lag = lag
         self.crypto_since = crypto_since
@@ -54,13 +54,15 @@ class Ctx:
         self.capital_usd = capital_usd
         self.min_fee_usd = min_fee_usd
         self.min_order_usd = min_order_usd
+        # En la cuenta real el efectivo ocioso no gana nada (Kraken 0%, IBKR 0% con menos de 10 mil)
+        self.cash_zero = cash_zero
         self._mem: Dict = {}
 
     def child(self, **kw) -> "Ctx":
         base = {"cost_mult": self.cost_mult, "lag": self.lag, "crypto_since": self.crypto_since,
                 "etf_since": self.etf_since, "refresh": False, "venue": self.venue,
                 "capital_usd": self.capital_usd, "min_fee_usd": self.min_fee_usd,
-                "min_order_usd": self.min_order_usd}
+                "min_order_usd": self.min_order_usd, "cash_zero": self.cash_zero}
         c = Ctx(**{**base, **kw})
         c._mem = self._mem
         return c
@@ -109,6 +111,8 @@ class Ctx:
 
     def cash_for(self, index: pd.DatetimeIndex) -> pd.Series:
         """Rendimiento del efectivo en USD para cada periodo del índice (de la barra anterior a ésta)."""
+        if self.cash_zero:
+            return pd.Series(0.0, index=index)
         daily = self.cash_daily()
         growth = (1 + daily).cumprod()
         g = growth.reindex(index, method="ffill").bfill()
@@ -729,6 +733,11 @@ def get_spec(key: str) -> Spec:
 from lab.secretas import SECRETAS  # noqa: E402
 
 CATALOG.extend(SECRETAS)
+
+# Las ideas de la sesión con Fable del 24 oct 2026 (lab/ideas_fable.py)
+from lab.ideas_fable import IDEAS  # noqa: E402
+
+CATALOG.extend(IDEAS)
 
 
 # ══════════ Portafolios que combinan estrategias ══════════
