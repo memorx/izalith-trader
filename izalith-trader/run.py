@@ -231,6 +231,7 @@ class IzalithSystem:
             "allocator_capital_usd": s.allocator_capital_usd,
             "allocator_check_minutes": s.allocator_check_minutes,
             "allocator_passive_orders": s.allocator_passive_orders,
+            "crypto_exchange": s.crypto_exchange,
             "collectors_interval_minutes": s.collectors_interval_minutes,
             "banxico_token": s.banxico_token,
             "report_hour": s.report_hour,
