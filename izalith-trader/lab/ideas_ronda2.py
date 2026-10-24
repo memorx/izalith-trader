@@ -276,13 +276,20 @@ def s_combo_wf(ctx: Ctx, vol_window=252, first_year=2019) -> Output:
     for k, o in outs.items():
         for sym, wv in (o.extra.get("target") or {}).items():
             target[sym] = target.get(sym, 0.0) + float(last_w[k]) * wv
+    used = sorted({k for picks in chosen.values() for k in picks})
+    biased = [k for k in used if "supervivencia" in str(outs[k].extra.get("aviso", ""))
+              or outs[k].extra.get("sesgo_seleccion")]
+    aviso = ("Piezas elegidas cada año con datos sólo hasta esa fecha, con un semáforo simplificado (sin ejecutar "
+             "tarde ni vecinos). El filtro casi no filtra: entra casi todo el pool, así que lo que da el resultado es "
+             "repartir el riesgo entre todas, no elegir bien.")
+    if biased:
+        # Revisión de Fable: hereda el sesgo de sus piezas
+        aviso += f" Hereda el sesgo de supervivencia de {', '.join(biased)}."
     out.extra.update({
         "target": {s: v for s, v in target.items() if abs(v) > 1e-9},
         "piezas_por_anio": {str(y): v for y, v in chosen.items()}, "pool": keys, "perp_cols": [],
         "universe": sorted({u for o in outs.values() for u in (o.extra.get("universe") or [])}),
-        "asset_ends": {}, "sesgo_seleccion": False,
-        "aviso": "Piezas elegidas cada año con datos sólo hasta esa fecha, con un semáforo simplificado "
-                 "(sin ejecutar tarde ni vecinos).",
+        "asset_ends": {}, "sesgo_seleccion": bool(biased), "aviso": aviso,
     })
     return out
 

@@ -1,6 +1,6 @@
 # Estrategias: revisión con datos reales
 
-Generado: 2026-10-24 20:30 UTC. Todos los números son **después de comisiones y deslizamiento**.
+Generado: 2026-10-24 21:03 UTC. Todos los números son **después de comisiones y deslizamiento**.
 Se usan los parámetros de libro, sin optimizar. 'Efectivo' es el T-bill de EE.UU. a 3 meses.
 
 Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.
@@ -54,7 +54,7 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 | 🟢 | Tendencia BTC+ETH con banda y ajuste a medio camino (idea de Fable) | Agresiva | +24.0% | +2.6% | -23% | 0.99 | +13.5% | +37.8% / -83% |
 | 🟡 | BTC y oro con banda (idea de Claude) | Agresiva | +17.8% | +2.6% | -15% | 1.09 | +19.2% | +37.8% / -83% |
 | 🟢 | Paridad de riesgo acciones, bonos y oro | Conservadora | +7.0% | +1.8% | -17% | 0.79 | +6.2% | +10.8% / -55% |
-| 🟡 | Combinado sin sesgo de selección (idea de Fable) | Moderada | +8.8% | +2.7% | -17% | 0.69 | +15.1% | +17.0% / -34% |
+| 🔴 | Combinado sin sesgo de selección (idea de Fable) | Moderada | +8.8% | +2.7% | -17% | 0.69 | +15.1% | +17.0% / -34% |
 | 🟡 | BTC por votación de plazos (idea de Fable) | Agresiva | +29.2% | +2.6% | -52% | 0.79 | +27.9% | +37.8% / -83% |
 | 🟡 | Tendencia BTC con freno por caída (idea de Fable) | Agresiva | +14.8% | +2.6% | -48% | 0.51 | +13.4% | +37.8% / -83% |
 | 🟡 | Portafolio de las 7 verdes | Moderada | +11.0% | +2.6% | -15% | 1.03 | +12.8% | +15.0% / -34% |
@@ -566,7 +566,7 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 - **Datos:** BTC (Binance) + PAXG desde 2020 y GLD antes
 - **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
 - **Rendimiento anual:** +17.8% · **caída máxima:** -15% · **peor año:** -7% · **meses positivos:** 49%
-- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ misma señal, menos costo
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
 - **Ojo:** Antes de 2020 el oro es GLD (Yahoo) como sustituto de PAXG.
 
 ### 🟢 Paridad de riesgo acciones, bonos y oro (Conservadora)
@@ -580,7 +580,7 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 - **Rendimiento anual:** +7.0% · **caída máxima:** -17% · **peor año:** -12% · **meses positivos:** 64%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial
 
-### 🟡 Combinado sin sesgo de selección (idea de Fable) (Moderada)
+### 🔴 Combinado sin sesgo de selección (idea de Fable) (Moderada)
 
 - **Cómo gana:** Cada año entran sólo las estrategias que pasaban el semáforo con los datos de ese momento, con capital según su riesgo.
 - **Riesgos:** Una pieza puede entrar justo antes de su peor año.
@@ -589,8 +589,8 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 - **Datos:** Estrategias de libro sin perpetuos; piezas elegidas cada año desde 2019
 - **Periodo:** 2019-01-01 a 2026-10-23 (7.81 años)
 - **Rendimiento anual:** +8.8% · **caída máxima:** -17% · **peor año:** -8% · **meses positivos:** 67%
-- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
-- **Ojo:** Piezas elegidas cada año con datos sólo hasta esa fecha, con un semáforo simplificado (sin ejecutar tarde ni vecinos).
+- **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido · ❌ no fue suerte
+- **Ojo:** Piezas elegidas cada año con datos sólo hasta esa fecha, con un semáforo simplificado (sin ejecutar tarde ni vecinos). El filtro casi no filtra: entra casi todo el pool, así que lo que da el resultado es repartir el riesgo entre todas, no elegir bien. Hereda el sesgo de supervivencia de emergentes_iguales, latam_tendencia, paises_momentum, paises_tendencia, xs_momentum.
 
 ### 🟡 BTC por votación de plazos (idea de Fable) (Agresiva)
 

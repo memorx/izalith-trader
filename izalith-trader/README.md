@@ -28,6 +28,8 @@ cp .env.example .env                                        # y edítalo
 #    http://127.0.0.1:8765
 ```
 
+En Windows, el ícono "Izalith Trader" del escritorio (`tools/abrir_izalith.vbs`) arranca el bot si está apagado y abre el panel.
+
 Sin ninguna llave ya funciona en papel: cripto con precios públicos del exchange y
 acciones con precios de Yahoo. Para dinero real hacen falta cuentas (ver abajo).
 
