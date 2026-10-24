@@ -1,6 +1,6 @@
 # Estrategias: revisión con datos reales
 
-Generado: 2026-10-24 16:02 UTC. Todos los números son **después de comisiones y deslizamiento**.
+Generado: 2026-10-24 16:49 UTC. Todos los números son **después de comisiones y deslizamiento**.
 Se usan los parámetros de libro, sin optimizar. 'Efectivo' es el T-bill de EE.UU. a 3 meses.
 
 Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · 🔴 no sirve como está · 🔬 en investigación.
@@ -46,7 +46,7 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 | 🔴 | Freno por pánico en opciones (inventada) | Moderada | +6.6% | +3.4% | -21% | 0.28 | +8.5% | +8.2% / -77% |
 | 🟡 | Tendencia BTC+ETH con banda (idea de Fable) | Agresiva | +23.8% | +2.6% | -23% | 1.00 | +12.7% | +37.8% / -83% |
 | 🟢 | Faber con el efectivo en T-bills (idea de Fable) | Moderada | +8.3% | +1.5% | -25% | 0.59 | +9.5% | +10.6% / -55% |
-| 🟡 | BTC y oro en tendencia (idea de Fable) | Agresiva | +16.5% | +2.6% | -14% | 1.05 | +18.0% | +37.8% / -83% |
+| 🟡 | BTC y oro en tendencia (idea de Fable) | Agresiva | +15.7% | +2.6% | -15% | 1.00 | +17.4% | +37.8% / -83% |
 | 🟡 | Faber con oro y bonos (idea de Fable) | Moderada | +6.8% | +1.8% | -11% | 0.72 | +6.8% | +10.8% / -55% |
 | 🟡 | Faber con volatilidad manejada (idea de Fable) | Moderada | +8.8% | +2.4% | -16% | 0.63 | +8.3% | +11.1% / -55% |
 | 🟡 | Rotación cripto sin ver el futuro (idea de Fable) | Especulativa | +75.8% | +2.6% | -67% | 1.09 | +36.0% | +37.8% / -83% |
@@ -490,9 +490,9 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 - **Capital mínimo sugerido:** 100 USD · **Frecuencia:** Semanal
 - **Datos:** BTC (Binance) + PAXG desde 2020 y GLD (Yahoo) antes
 - **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
-- **Rendimiento anual:** +16.5% · **caída máxima:** -14% · **peor año:** -7% · **meses positivos:** 50%
+- **Rendimiento anual:** +15.7% · **caída máxima:** -15% · **peor año:** -7% · **meses positivos:** 49%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ no fue suerte
-- **Ojo:** Antes de 2020 el oro es GLD (Yahoo) como sustituto de PAXG.
+- **Ojo:** Antes de 2020 el oro es GLD (Yahoo) como sustituto de PAXG. La idea del oro se propuso conociendo su racha de 2019-2025: por eso es inventada.
 
 ### 🟡 Faber con oro y bonos (idea de Fable) (Moderada)
 
@@ -526,7 +526,7 @@ Semáforo: 🟢 pasa las 6 pruebas y sus candados · 🟡 pasa casi todas · �
 - **Periodo:** 2017-08-17 a 2026-10-23 (9.18 años)
 - **Rendimiento anual:** +75.8% · **caída máxima:** -67% · **peor año:** -32% · **meses positivos:** 38%
 - **Pruebas:** ✅ le gana al efectivo · ✅ fuera de muestra · ✅ doble costo · ✅ ejecutar tarde · ✅ parámetros vecinos · ✅ caída < 85% · ✅ 3+ años de historial · ❌ sin sesgo conocido
-- **Ojo:** Sesgo de supervivencia (menor): las monedas que dejaron de existir (LUNA, FTT...) no tienen datos gratis y no están.
+- **Ojo:** Sesgo de supervivencia sustancial en 2017-2019: las 48 candidatas se eligieron sabiendo cuáles sobrevivieron y cuáles crecieron; las que murieron (LUNA, FTT, NANO...) no están. El rendimiento es una cota superior, no una estimación.
 
 ### 🟡 Portafolio de las 7 verdes (Moderada)
 

@@ -15,13 +15,17 @@
   - 9 en verde: 60/40, efectivo + 10% BTC, DCA S&P, Faber, momentum dual, RSI-2, tendencia BTC, tendencia BTC+ETH con volatilidad controlada y Faber con el efectivo en BIL.
   - En amarillo: los combinados (sesgo de selección), el DCA de BTC (-83%) y las ideas nuevas de Fable.
   - Las 15 inventadas: ninguna pasa "no fue suerte" (contando 112 variantes probadas).
-- **Ideas de Fable del 24/10** (`docs/IDEAS-2026-10-24.md`, `lab/ideas_fable.py`): la mejor es la banda en la tendencia BTC+ETH (20.6% contra 18.0% neto en Kraken con $200, 27 órdenes al año contra 40). BTC + oro y Faber + oro + bonos caen la mitad, pero rinden menos. Faber con vol manejada no sirvió.
+- **Ideas de Fable del 24/10** (`docs/IDEAS-2026-10-24.md`, `lab/ideas_fable.py`), con merge en el PR #3:
+  - La mejor es la banda en la tendencia BTC+ETH: 27 órdenes al año contra 40. Lo esperable son **+1.2 a 1.5 puntos** netos en Kraken. El 20.6% contra 18.0% del backtest incluye ruido de muestra; fuera de muestra empatan.
+  - BTC + oro y Faber + oro + bonos caen la mitad, pero rinden menos.
+  - Faber con vol manejada no sirvió.
+  - El 75.8% de la rotación "sin ver el futuro" es cota superior: la lista de candidatas ya sabe cuáles sobrevivieron.
 - Aportaciones (`python -m lab.aportaciones`): $200 desde 2018 terminan en ~$950 sin aportar; con $100 al mes, ~$23,900 de $10,700 aportados.
 - El allocator ya no corre una estrategia que con su capital pierda más de 1.5 puntos al año por los mínimos por orden.
 - Comisión de Kraken Pro verificada el 24/10 en su página oficial: 0.40% maker / 0.80% taker hasta $2,500 al mes.
 - Cuenta chica (`python -m lab.small_account`): 100, 200, 1,000 y 5,000 dólares, ahora también con el efectivo ocioso al 0% como en la cuenta real.
 - Estudio de Polymarket (`python -m lab.polymarket_study`): comprar al favorito no tiene ventaja (entre -6.1% y +2.7% por apuesta, 95% de confianza).
-- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 128 pruebas pasan en la rama de arreglos (`pytest tests/`).
+- Bot en vivo con la revisión de Fable aplicada (ver la entrada del 23/10). 130 pruebas pasan (`pytest tests/`).
 - Arranque automático al iniciar sesión (carpeta Inicio de Windows); `tools/detener.bat` lo apaga en orden.
 - Corrida en papel de Memo: `.env` con `DRY_RUN=true`, Kraken, `PAPER_CASH_USD=200`, trend_voltarget y faber_trend con $100 cada una; base `data/izalith.db`.
   - Reiniciada con `master` el 23/10 cerca de las 16:00 (hora de México). Corre oculta con `tools/arrancar_oculto.vbs`, igual que el arranque automático; el log va a `logs/bot_consola.log`.
@@ -54,8 +58,8 @@
 
   | Idea | Neto en Kraken o IBKR | Caída | Veredicto |
   |---|---|---|---|
-  | Banda en tendencia BTC+ETH | 20.6% (antes 18.0%) | -26% | **La mejor:** menos órdenes |
-  | BTC + oro | 11.9% | -20% | Menos caída, menos rendimiento |
+  | Banda en tendencia BTC+ETH | 20.6% (antes 18.0%); lo esperable, +1.2 a 1.5 puntos | -26% | **La mejor:** menos órdenes; fuera de muestra empata |
+  | BTC + oro | 11.2% (con el costo de PAXG corregido) | -21% | Menos caída, menos rendimiento |
   | Faber + oro + bonos | 5.4% | -14% | Menos caída, menos rendimiento |
   | Faber con vol manejada | 8.3% | -16% | **Muere:** no mejoró el Sharpe lo pedido |
   | Faber con efectivo en BIL | +0.5 puntos desde 2007 | | Sirve desde ~$1,000; con $200 lo comen las órdenes de $1 |
@@ -64,6 +68,8 @@
 
 **Decisiones y descartes**
 - La banda no pasa "no fue suerte" (11%), pero su ganancia es mecánica: paga menos comisión, no predice mejor. Pasó el criterio que Fable fijó antes (≥1 punto neto más en Kraken).
+- Corrección de Fable al revisar: el +2.6 incluye ruido de muestra; lo esperable es +1.2 a 1.5 puntos. Yo le había dicho +2.6 a Memo.
+- Pendiente que propuso Fable: una clase "ejecución" en el semáforo para cambios como la banda (hereda el semáforo de su base sin pasar por "no fue suerte").
 - El 0.25%/0.40% de Kraken que recordaba Fable ya no aplica. La página oficial del 24/10 dice 0.40%/0.80%.
 
 ---
