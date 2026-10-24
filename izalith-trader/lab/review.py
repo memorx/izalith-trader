@@ -92,6 +92,7 @@ def evaluate(spec: Spec, ctx: Ctx, robustness: bool = True) -> dict:
         "mercado": spec.mercado, "donde": spec.donde, "idea": spec.idea, "riesgos": spec.riesgos,
         "capital_min_usd": spec.capital_min_usd, "frecuencia": spec.frecuencia, "tipo": spec.tipo,
         "datos": spec.datos, "params": spec.params, "inventada": spec.inventada,
+        "ejecucion": spec.ejecucion, "base": spec.base if (spec.inventada or spec.ejecucion) else "",
     }
     if spec.run is None:
         entry["semaforo"] = "investigacion"
@@ -240,6 +241,87 @@ def apply_luck_test(results: list, ctx: Ctx) -> None:
         grade(e)
 
 
+EXEC_MAX_OOS_GAP = 0.01      # el rendimiento bruto fuera de muestra no cambia más de 1 punto
+EXEC_MIN_P = 0.10            # la diferencia semanal en toda la muestra no se distingue de cero
+EXEC_MAX_EXTRA_DD = 0.05     # la caída máxima no es peor que la de la base por más de 5 puntos
+RANK = {"rojo": 0, "amarillo": 1, "verde": 2}
+
+
+def _gross(out) -> pd.Series:
+    """Rendimiento antes de costos: lo que dio la señal, sin lo que se pagó al operar."""
+    costs = out.costs.reindex(out.returns.index).fillna(0.0) if out.costs is not None else 0.0
+    return out.returns + costs
+
+
+def _weekly(r: pd.Series) -> pd.Series:
+    return (1 + r).resample("W-MON", closed="left", label="left").prod() - 1
+
+
+def apply_execution_class(results: list, ctx: Ctx) -> None:
+    """
+    Clase "ejecución" (propuesta y revisada por Fable, 24 oct 2026): para variantes que usan la
+    MISMA señal que su base y sólo cambian tamaño, momento o costo (una banda, un estimador de
+    volatilidad, ajustes parciales). No buscan una ventaja nueva, así que no pasan "no fue suerte";
+    en cambio heredan el semáforo de su base si:
+      1. el rendimiento bruto fuera de muestra no difiere más de 1 punto al año;
+      2. la prueba t pareada de las diferencias semanales de rendimiento bruto, en toda la
+         muestra, da p > 0.10 (no se distingue de la base);
+      3. el costo anual es menor;
+      4. la caída máxima no es peor que la de la base por más de 5 puntos.
+    Si no, quedan en amarillo como máximo. Las bases se resuelven en cadena (una variante puede
+    tener como base otra variante).
+    """
+    by_key = {e["key"]: e for e in results}
+    pending = [e for e in results if e.get("ejecucion") and e.get("metricas")]
+    for _ in range(len(pending) + 1):
+        progress = False
+        for e in list(pending):
+            base = by_key.get(e.get("base"))
+            if base is None or base in pending or not base.get("semaforo"):
+                continue
+            spec = next(s for s in CATALOG if s.key == e["key"])
+            bspec = next(s for s in CATALOG if s.key == spec.base)
+            out, bout = spec.run(ctx, **spec.params), bspec.run(ctx, **bspec.params)
+            g, gb = _gross(out), _gross(bout)
+            both = pd.concat([g, gb], axis=1, keys=["s", "b"]).dropna()
+            split = both.index[int(len(both) * (1 - OOS_FRACTION))]
+            oos = both[both.index >= split]
+            gap = _cagr_of(oos["s"]) - _cagr_of(oos["b"])
+            diff = (_weekly(both["s"]) - _weekly(both["b"])).dropna()
+            sd = diff.std()
+            tstat = float(diff.mean() / (sd / math.sqrt(len(diff)))) if sd > 0 and len(diff) > 2 else 0.0
+            p = math.erfc(abs(tstat) / math.sqrt(2))
+            years = max((out.returns.index[-1] - out.returns.index[0]).days / 365.25, 1e-9)
+            byears = max((bout.returns.index[-1] - bout.returns.index[0]).days / 365.25, 1e-9)
+            cost = float(out.costs.sum() / years) if out.costs is not None else 0.0
+            bcost = float(bout.costs.sum() / byears) if bout.costs is not None else 0.0
+            dd, bdd = e["metricas"]["max_drawdown"], base["metricas"]["max_drawdown"]
+            checks = {"rinde_igual_fuera_de_muestra": abs(gap) <= EXEC_MAX_OOS_GAP,
+                      "no_se_distingue_de_la_base": p > EXEC_MIN_P,
+                      "cuesta_menos": cost < bcost,
+                      "no_cae_mas": dd >= bdd - EXEC_MAX_EXTRA_DD}
+            ok = all(checks.values())
+            e["ejecucion_prueba"] = {"base": spec.base, "base_nombre": bspec.nombre, "brecha_bruta_oos": gap,
+                                     "p_semanal": p, "costo_anual": cost, "costo_anual_base": bcost,
+                                     "caida": dd, "caida_base": bdd, **checks}
+            e.setdefault("pruebas", {})["ejecucion_equivalente"] = ok
+            if ok:
+                e["semaforo"] = base["semaforo"]
+            else:
+                grade({**e, "pruebas": {k: v for k, v in e["pruebas"].items() if k != "ejecucion_equivalente"}})
+                own = e.get("semaforo", "rojo")
+                e["semaforo"] = own if RANK.get(own, 0) <= RANK["amarillo"] else "amarillo"
+            pending.remove(e)
+            progress = True
+        if not progress:
+            break
+
+
+def _cagr_of(r: pd.Series) -> float:
+    years = (r.index[-1] - r.index[0]).days / 365.25 if len(r) > 1 else 0
+    return float((1 + r).prod() ** (1 / years) - 1) if years > 0 else float("nan")
+
+
 def _pct(x, digits=1):
     return "—" if x is None or (isinstance(x, float) and math.isnan(x)) else f"{x * 100:+.{digits}f}%"
 
@@ -302,7 +384,8 @@ def write_markdown(report: dict) -> None:
                            "sin_sesgo_conocido": "sin sesgo conocido",
                            "suficientes_operaciones": "30+ operaciones",
                            "historial_suficiente": "3+ años de historial",
-                           "no_es_suerte": "no fue suerte"}
+                           "no_es_suerte": "no fue suerte",
+                           "ejecucion_equivalente": "misma señal, menos costo"}
                 lines.append("- **Pruebas:** " + " · ".join(
                     f"{'✅' if v else '❌'} {nombres.get(k, k)}" for k, v in e["pruebas"].items()))
             if e.get("extra", {}).get("aviso"):
@@ -369,6 +452,7 @@ def main():
         merged = {**previous, **{e["key"]: e for e in results}}
         results = [merged[s.key] for s in CATALOG if s.key in merged]
     apply_luck_test(results, ctx)
+    apply_execution_class(results, ctx)
 
     report = {"generado": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "estrategias": results}
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)

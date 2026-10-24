@@ -245,7 +245,6 @@ IDEAS: List[Spec] = [
 
 # Las que buscan una ventaja nueva se miden contra su versión de libro
 BASES: Dict[str, str] = {
-    "fab_vt_banda": "trend_voltarget",
     "fab_btc_oro": "trend_voltarget",
     "fab_gtaa3": "faber_trend",
     "fab_faber_vol": "faber_trend",
@@ -255,3 +254,8 @@ for _s in IDEAS:
     if _s.key in BASES:
         _s.inventada = True
         _s.base = BASES[_s.key]
+
+# 24 oct 2026, ronda 2: la banda no busca una ventaja nueva (misma señal, menos órdenes), así que
+# pasa a la clase "ejecución" que propuso Fable. La regla se fijó antes de calcular si la banda pasa.
+_banda = next(s for s in IDEAS if s.key == "fab_vt_banda")
+_banda.ejecucion, _banda.base = True, "trend_voltarget"

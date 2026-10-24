@@ -185,3 +185,30 @@ def test_allocator_skips_strategies_too_small_for_their_fees(tmp_path, monkeypat
     assert bot.size_drag("rsi2_spy") == pytest.approx(0.045)
     assert bot._validate() == ["trend_voltarget"]
     assert bot.state["rsi2_spy"]["status"].startswith("en pausa")
+
+
+# ── Ronda 2 ──
+
+def test_banded_partial_moves_half_way_and_flips_go_full():
+    from lab.ideas_ronda2 import banded
+    idx = pd.date_range("2024-01-01", periods=4, freq="D", tz="UTC")
+    w = pd.DataFrame({"A": [0.2, 0.5, 0.5, 0.9]}, index=idx)
+    flips = np.array([False, False, False, True])
+    check = np.array([True, True, False, False])
+    t = banded(w, flips, check, band=0.10, step=0.5)
+    assert t["A"].iloc[0] == pytest.approx(0.2)
+    assert t["A"].iloc[1] == pytest.approx(0.35)       # medio camino de 0.2 a 0.5
+    assert np.isnan(t["A"].iloc[2])                     # no es día de revisión
+    assert t["A"].iloc[3] == pytest.approx(0.9)         # cambio de señal: completo
+
+
+def test_walk_forward_selection_uses_only_past_data():
+    from lab.ideas_ronda2 import _passes
+    idx = pd.date_range("2015-01-01", "2018-12-31", freq="D", tz="UTC")
+    good = pd.Series(0.0004, index=idx)
+    cash = pd.Series(0.0001, index=idx)
+    assert _passes(good, good, cash)
+    assert not _passes(good[-500:], good[-500:], cash)  # menos de 3 años de historia
+    bad_late = good.copy()
+    bad_late[bad_late.index >= "2017-06-01"] = -0.0002
+    assert not _passes(bad_late, bad_late, cash)          # pierde en su último 40%
