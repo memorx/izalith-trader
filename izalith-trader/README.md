@@ -35,7 +35,7 @@ acciones con precios de Yahoo. Para dinero real hacen falta cuentas (ver abajo).
 
 | Parte | Para qué |
 |---|---|
-| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 45 estrategias de seguras a arriesgadas (15 de ellas inventadas aquí), con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez más candados (historial, número de operaciones, sesgos conocidos y, para las inventadas, la prueba de "no fue suerte"): acciones de EE.UU., cripto, carry de funding y **33 países** (Latinoamérica, Asia, África, Medio Oriente, Europa) vía ETFs de país. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
+| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 52 estrategias de seguras a arriesgadas (17 inventadas aquí y 4 variantes de ejecución), con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez más candados (historial, número de operaciones, sesgos conocidos y, para las inventadas, la prueba de "no fue suerte"): acciones de EE.UU., cripto, carry de funding y **33 países** (Latinoamérica, Asia, África, Medio Oriente, Europa) vía ETFs de país. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
 | `lab/small_account.py` | Las mismas estrategias con cuentas de 100, 200, 1,000 y 5,000 dólares y las comisiones reales de Binance, NDAX, Bitso, Kraken (límite, suponiendo que 70% se llena esperando, y mercado) e IBKR (con su dólar mínimo por orden). |
 | `lab/polymarket_study.py` | ¿Los precios de Polymarket dicen la verdad? Mercados ya resueltos, foto 7 días antes de la fecha programada de cierre. |
 | `lab/aportaciones.py` | Una cuenta que empieza con $200 y aporta cada mes hacia cada estrategia, con costos reales y el efectivo ocioso al 0%. Ideas de Fable del 24 oct 2026 en `docs/IDEAS-2026-10-24.md`. |
@@ -64,6 +64,9 @@ conocido (supervivencia en altcoins, o piezas elegidas por haber salido verdes e
 deja la estrategia en amarillo como máximo. Las inventadas además tienen que pasar "no fue suerte".
 
 Verde = pasa todo. Amarillo = casi. Rojo = no sirve como está.
+
+Las variantes de "ejecución" (misma señal, distinta forma de operarla, como una banda para operar menos)
+no pasan "no fue suerte": heredan el color de su base si rinden igual antes de costos, cuestan menos y no caen más.
 
 Resultados del 23 oct 2026: ver `docs/ESTRATEGIAS.md` o la pestaña Estrategias del panel.
 
@@ -145,7 +148,7 @@ O el botón "Descargar CSV para el contador" en "En vivo".
 .venv\Scripts\python -m pytest tests/ -q
 ```
 
-130 pruebas. Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de
+132 pruebas. Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de
 largos y cortos, cierres parciales, efectivo tras reinicio, el día local, órdenes duplicadas,
 órdenes que quedan vivas o se llenan tarde, errores de red a media orden (contra un Kraken y un
 IBKR falsos), el freno, el modo real, el calendario de NYSE, los candados del allocator, el
