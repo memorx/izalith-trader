@@ -35,9 +35,10 @@ acciones con precios de Yahoo. Para dinero real hacen falta cuentas (ver abajo).
 
 | Parte | Para qué |
 |---|---|
-| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 39 estrategias de seguras a arriesgadas (11 de ellas inventadas aquí), con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez más candados (historial, número de operaciones, sesgos conocidos y, para las inventadas, la prueba de "no fue suerte"): acciones de EE.UU., cripto, carry de funding y **33 países** (Latinoamérica, Asia, África, Medio Oriente, Europa) vía ETFs de país. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
+| `lab/` | Backtests con comisión, deslizamiento y funding. Catálogo de 45 estrategias de seguras a arriesgadas (15 de ellas inventadas aquí), con sus parámetros de libro (sin optimizar) y 6 pruebas de robustez más candados (historial, número de operaciones, sesgos conocidos y, para las inventadas, la prueba de "no fue suerte"): acciones de EE.UU., cripto, carry de funding y **33 países** (Latinoamérica, Asia, África, Medio Oriente, Europa) vía ETFs de país. `python -m lab.review` escribe `data/lab/report.json` y `docs/ESTRATEGIAS.md`. |
 | `lab/small_account.py` | Las mismas estrategias con cuentas de 100, 200, 1,000 y 5,000 dólares y las comisiones reales de Binance, NDAX, Bitso, Kraken (límite, suponiendo que 70% se llena esperando, y mercado) e IBKR (con su dólar mínimo por orden). |
 | `lab/polymarket_study.py` | ¿Los precios de Polymarket dicen la verdad? Mercados ya resueltos, foto 7 días antes de la fecha programada de cierre. |
+| `lab/aportaciones.py` | Una cuenta que empieza con $200 y aporta cada mes hacia cada estrategia, con costos reales y el efectivo ocioso al 0%. Ideas de Fable del 24 oct 2026 en `docs/IDEAS-2026-10-24.md`. |
 | `modules/allocator` | Corre en vivo las estrategias de portafolio del laboratorio con **el mismo código** del backtest; cada una con su propio capital. En cripto usa órdenes límite que esperan en el libro (mitad de comisión en Kraken). No rebalancea si a la decisión le falta un activo o tiene datos viejos, y en real no corre estrategias que mezclan cuentas de brokers distintos. |
 | `modules/collectors` | Fotos de mercados poco vigilados cada 15 min: funding de Binance, Bybit y Hyperliquid y sus diferencias, perpetuos de acciones y oro 24/7, prima del peso en Bitso, **dólar cripto y BTC en 16 países** (Argentina, Venezuela, India, Corea, Turquía, Nigeria, Sudáfrica...), Polymarket. Guarda historial por hora. |
 | `modules/reports` | Resumen diario por Telegram, alertas cuando algo requiere atención (un módulo se cayó, una orden sin registrar, una fuente sin conexión) y latido para healthchecks.io. |
@@ -144,7 +145,7 @@ O el botón "Descargar CSV para el contador" en "En vivo".
 .venv\Scripts\python -m pytest tests/ -q
 ```
 
-128 pruebas. Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de
+130 pruebas. Cubren el motor de backtest (sin ver el futuro, costos), los adaptadores, el P&L de
 largos y cortos, cierres parciales, efectivo tras reinicio, el día local, órdenes duplicadas,
 órdenes que quedan vivas o se llenan tarde, errores de red a media orden (contra un Kraken y un
 IBKR falsos), el freno, el modo real, el calendario de NYSE, los candados del allocator, el

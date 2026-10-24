@@ -145,3 +145,43 @@ async def test_every_stop_call_waits_for_the_same_shutdown():
     await system.stop()                     # la del final de main()
     assert calls == ["inicio", "fin"]       # una sola vez, y ya terminó
     await first
+
+
+# ── Ideas de Fable del 24 oct ──
+
+def _fake_ctx(monkeypatch):
+    from lab.catalog import Ctx
+    rng = np.random.default_rng(7)
+    idx = pd.date_range("2019-01-01", periods=900, freq="D", tz="UTC")
+    px = pd.DataFrame({"BTC/USDT": 100 * np.exp(np.cumsum(rng.normal(0.001, 0.04, 900))),
+                       "ETH/USDT": 50 * np.exp(np.cumsum(rng.normal(0.001, 0.05, 900)))}, index=idx)
+    ctx = Ctx(refresh=False)
+    monkeypatch.setattr(ctx, "crypto_close", lambda symbols: px[symbols])
+    return ctx
+
+
+def test_band_trades_less_than_weekly_rebalancing(monkeypatch):
+    from lab.catalog import s_trend_voltarget
+    from lab.ideas_fable import s_vt_banda
+    ctx = _fake_ctx(monkeypatch)
+    base = s_trend_voltarget(ctx)
+    banda = s_vt_banda(ctx, band=0.10)
+    assert banda.extra["rebalances"] < base.extra["rebalances"]
+    assert set(banda.extra["universe"]) == {"BTC/USDT", "ETH/USDT"}
+
+
+def test_allocator_skips_strategies_too_small_for_their_fees(tmp_path, monkeypatch, db):
+    import json
+    import modules.allocator.bot as alloc
+    rows = [{"estrategia": "rsi2_spy", "lugar": "ibkr", "capital": c, "cagr": v}
+            for c, v in [(100, -0.05), (200, 0.026), (1000, 0.07), (5000, 0.071)]]
+    rows += [{"estrategia": "trend_voltarget", "lugar": "kraken_limite", "capital": c, "cagr": 0.18} for c in (100, 200, 5000)]
+    path = tmp_path / "small.json"
+    path.write_text(json.dumps({"filas": rows}), encoding="utf-8")
+    monkeypatch.setattr(alloc, "SMALL_ACCOUNT", path)
+    bot = alloc.AllocatorBot({}, SimpleNamespace(_get_adapter_for_symbol=lambda s: None), None, db,
+                             {"allocator_strategies": ["rsi2_spy", "trend_voltarget"], "allocator_capital_usd": 200,
+                              "crypto_exchange": "kraken"})
+    assert bot.size_drag("rsi2_spy") == pytest.approx(0.045)
+    assert bot._validate() == ["trend_voltarget"]
+    assert bot.state["rsi2_spy"]["status"].startswith("en pausa")
