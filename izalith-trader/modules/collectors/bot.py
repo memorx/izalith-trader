@@ -52,7 +52,14 @@ class CollectorsBot:
                         None if r.get("prima_btc_pct") is None else round(r["prima_btc_pct"], 3))
                        for r in snap.get("paises", {}).get("paises", [])],
         }
-        await self.db.kv_set(f"collect:{now:%Y-%m-%dT%H}", compact)
+        key = f"collect:{now:%Y-%m-%dT%H}"
+        # Spread de Kraken (idea N6): se guardan TODAS las lecturas de la hora, no sólo la última,
+        # para saber a qué hora conviene rebalancear (revisión de Fable: antes no se guardaba)
+        spreads = {par: None if v.get("spread_bps") is None else round(v["spread_bps"], 2)
+                   for par, v in (snap.get("kraken_spreads") or {}).get("pares", {}).items()}
+        prev = (await self.db.kv_get(key)) or {}
+        compact["kraken_spreads"] = (prev.get("kraken_spreads") or []) + ([{"min": now.minute, **spreads}] if spreads else [])
+        await self.db.kv_set(key, compact)
 
     async def run(self) -> None:
         self._running = True

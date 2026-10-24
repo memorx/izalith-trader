@@ -197,7 +197,7 @@ def grade(entry: dict) -> None:
         entry["semaforo"] = "rojo"
 
 
-def apply_luck_test(results: list, ctx: Ctx) -> None:
+def apply_luck_test(results: list, ctx: Ctx, extra_invented=()) -> None:
     """
     Prueba de "no fue suerte" para las estrategias inventadas.
 
@@ -208,7 +208,8 @@ def apply_luck_test(results: list, ctx: Ctx) -> None:
     invented = [e for e in results if e.get("inventada") and e.get("metricas")]
     # Cada idea cuenta con todas sus variantes probadas (parámetros vecinos), y la prueba misma se
     # rediseñó una vez (22 oct 2026): se cuenta doble para no premiar haber buscado la forma de medir.
-    variants = sum(1 + sum(len(v) for v in s.grid.values()) for s in CATALOG if s.inventada)
+    extra = set(extra_invented) | {e["key"] for e in results if e.get("reclasificada")}
+    variants = sum(1 + sum(len(v) for v in s.grid.values()) for s in CATALOG if s.inventada or s.key in extra)
     n_trials = max(1, 2 * variants)
     for e in invented:
         spec = next(s for s in CATALOG if s.key == e["key"])
@@ -257,6 +258,49 @@ def _weekly(r: pd.Series) -> pd.Series:
     return (1 + r).resample("W-MON", closed="left", label="left").prod() - 1
 
 
+def _exec_stats(spec, bspec, ctx: Ctx) -> dict:
+    """Comparación antes de costos entre una variante de ejecución y su base."""
+    out, bout = spec.run(ctx, **spec.params), bspec.run(ctx, **bspec.params)
+    both = pd.concat([_gross(out), _gross(bout)], axis=1, keys=["s", "b"]).dropna()
+    split = both.index[int(len(both) * (1 - OOS_FRACTION))]
+    oos = both[both.index >= split]
+    gap = _cagr_of(oos["s"]) - _cagr_of(oos["b"])
+    diff = (_weekly(both["s"]) - _weekly(both["b"])).dropna()
+    sd = diff.std()
+    tstat = float(diff.mean() / (sd / math.sqrt(len(diff)))) if sd > 0 and len(diff) > 2 else 0.0
+    years = max((out.returns.index[-1] - out.returns.index[0]).days / 365.25, 1e-9)
+    byears = max((bout.returns.index[-1] - bout.returns.index[0]).days / 365.25, 1e-9)
+    return {"base": spec.base, "base_nombre": bspec.nombre, "brecha_bruta_oos": gap,
+            "p_semanal": math.erfc(abs(tstat) / math.sqrt(2)),
+            "costo_anual": float(out.costs.sum() / years) if out.costs is not None else 0.0,
+            "costo_anual_base": float(bout.costs.sum() / byears) if bout.costs is not None else 0.0}
+
+
+def reclassify_distinguishable(results: list, ctx: Ctx) -> set:
+    """
+    Regla de Fable (24 oct 2026, al aprobar el PR #5): una variante de "ejecución" cuyo rendimiento
+    antes de costos SÍ se distingue del de su base (p <= 0.10) no está operando la misma señal de
+    otra forma: está haciendo algo distinto. Se reclasifica como inventada contra su base, cuenta
+    en las ideas probadas y tiene que pasar "no fue suerte". Corre antes de la prueba de suerte.
+    """
+    keys = set()
+    for e in results:
+        if not (e.get("ejecucion") and e.get("metricas")):
+            continue
+        spec = next(s for s in CATALOG if s.key == e["key"])
+        bspec = next((s for s in CATALOG if s.key == spec.base), None)
+        if bspec is None:
+            continue
+        stats = _exec_stats(spec, bspec, ctx)
+        e["ejecucion_prueba"] = stats
+        if stats["p_semanal"] <= EXEC_MIN_P:
+            e["ejecucion"], e["inventada"] = False, True
+            e["reclasificada"] = ("Se distingue de su base antes de costos (p <= 0.10): se califica como idea "
+                                  "inventada contra ella.")
+            keys.add(e["key"])
+    return keys
+
+
 def apply_execution_class(results: list, ctx: Ctx) -> None:
     """
     Clase "ejecución" (propuesta y revisada por Fable, 24 oct 2026): para variantes que usan la
@@ -279,36 +323,22 @@ def apply_execution_class(results: list, ctx: Ctx) -> None:
             base = by_key.get(e.get("base"))
             if base is None or base in pending or not base.get("semaforo"):
                 continue
-            spec = next(s for s in CATALOG if s.key == e["key"])
-            bspec = next(s for s in CATALOG if s.key == spec.base)
-            out, bout = spec.run(ctx, **spec.params), bspec.run(ctx, **bspec.params)
-            g, gb = _gross(out), _gross(bout)
-            both = pd.concat([g, gb], axis=1, keys=["s", "b"]).dropna()
-            split = both.index[int(len(both) * (1 - OOS_FRACTION))]
-            oos = both[both.index >= split]
-            gap = _cagr_of(oos["s"]) - _cagr_of(oos["b"])
-            diff = (_weekly(both["s"]) - _weekly(both["b"])).dropna()
-            sd = diff.std()
-            tstat = float(diff.mean() / (sd / math.sqrt(len(diff)))) if sd > 0 and len(diff) > 2 else 0.0
-            p = math.erfc(abs(tstat) / math.sqrt(2))
-            years = max((out.returns.index[-1] - out.returns.index[0]).days / 365.25, 1e-9)
-            byears = max((bout.returns.index[-1] - bout.returns.index[0]).days / 365.25, 1e-9)
-            cost = float(out.costs.sum() / years) if out.costs is not None else 0.0
-            bcost = float(bout.costs.sum() / byears) if bout.costs is not None else 0.0
+            stats = e.get("ejecucion_prueba") or _exec_stats(next(s for s in CATALOG if s.key == e["key"]),
+                                                               next(s for s in CATALOG if s.key == e["base"]), ctx)
+            gap, p = stats["brecha_bruta_oos"], stats["p_semanal"]
+            cost, bcost = stats["costo_anual"], stats["costo_anual_base"]
             dd, bdd = e["metricas"]["max_drawdown"], base["metricas"]["max_drawdown"]
             checks = {"rinde_igual_fuera_de_muestra": abs(gap) <= EXEC_MAX_OOS_GAP,
                       "no_se_distingue_de_la_base": p > EXEC_MIN_P,
                       "cuesta_menos": cost < bcost,
                       "no_cae_mas": dd >= bdd - EXEC_MAX_EXTRA_DD}
             ok = all(checks.values())
-            e["ejecucion_prueba"] = {"base": spec.base, "base_nombre": bspec.nombre, "brecha_bruta_oos": gap,
-                                     "p_semanal": p, "costo_anual": cost, "costo_anual_base": bcost,
-                                     "caida": dd, "caida_base": bdd, **checks}
+            e["ejecucion_prueba"] = {**stats, "caida": dd, "caida_base": bdd, **checks}
             e.setdefault("pruebas", {})["ejecucion_equivalente"] = ok
             if ok:
                 e["semaforo"] = base["semaforo"]
             else:
-                grade({**e, "pruebas": {k: v for k, v in e["pruebas"].items() if k != "ejecucion_equivalente"}})
+                # Su propio semáforo (el de las pruebas normales), con tope en amarillo
                 own = e.get("semaforo", "rojo")
                 e["semaforo"] = own if RANK.get(own, 0) <= RANK["amarillo"] else "amarillo"
             pending.remove(e)
@@ -451,7 +481,8 @@ def main():
     if previous:
         merged = {**previous, **{e["key"]: e for e in results}}
         results = [merged[s.key] for s in CATALOG if s.key in merged]
-    apply_luck_test(results, ctx)
+    reclassified = reclassify_distinguishable(results, ctx)
+    apply_luck_test(results, ctx, extra_invented=reclassified)
     apply_execution_class(results, ctx)
 
     report = {"generado": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "estrategias": results}
