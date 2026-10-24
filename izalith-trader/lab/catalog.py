@@ -590,6 +590,7 @@ class Spec:
     tipo: str = "weights"      # weights | signals | dca | investigacion
     datos: str = ""            # qué datos usa el backtest
     inventada: bool = False    # inventada aquí: además tiene que pasar la prueba de "no fue suerte"
+    ejecucion: bool = False    # misma señal que su base, distinta forma de operarla (ver lab/review.py)
     base: str = ""             # contra qué se mide la idea: clave del catálogo, "benchmark" o "cash"
 
 
@@ -738,6 +739,11 @@ CATALOG.extend(SECRETAS)
 from lab.ideas_fable import IDEAS  # noqa: E402
 
 CATALOG.extend(IDEAS)
+
+# Ronda 2 (24 oct 2026, reglas revisadas por Fable antes de correr): lab/ideas_ronda2.py
+from lab.ideas_ronda2 import IDEAS2  # noqa: E402
+
+CATALOG.extend(IDEAS2)
 
 
 # ══════════ Portafolios que combinan estrategias ══════════

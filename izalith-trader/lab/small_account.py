@@ -39,8 +39,10 @@ from lab.metrics import summarize
 
 OUT = Path(__file__).parent.parent / "data" / "lab" / "small_account.json"
 
-CRYPTO = ["cash_plus_btc", "trend_btc", "trend_voltarget", "xs_momentum", "fab_vt_banda", "fab_btc_oro", "fab_xs_pit"]
-ETF = ["etf_60_40", "faber_trend", "dual_momentum", "rsi2_spy", "fab_faber_bil", "fab_gtaa3", "fab_faber_vol"]
+CRYPTO = ["cash_plus_btc", "trend_btc", "trend_voltarget", "xs_momentum", "fab_vt_banda", "fab_btc_oro", "fab_xs_pit",
+          "eje_vol_ewma", "eje_medio_camino", "cla_btc_oro_banda", "fab_btc_votos", "fab_freno_bolsa"]
+ETF = ["etf_60_40", "faber_trend", "dual_momentum", "rsi2_spy", "fab_faber_bil", "fab_gtaa3", "fab_faber_vol",
+       "fab_paridad"]
 CAPITALS = [100, 200, 1000, 5000]
 KRAKEN_LIMIT_BLEND = 0.7 * 0.004 + 0.3 * 0.008
 

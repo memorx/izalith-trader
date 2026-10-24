@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 
 from lab.catalog import Ctx, get_spec
-from lab.engine import Costs, _xirr
+from lab.engine import Costs, _xirr, backtest_dca
 
 OUT = Path(__file__).parent.parent / "data" / "lab" / "aportaciones.json"
 
@@ -97,6 +97,26 @@ def simulate(r: pd.Series, exposure: pd.Series, monthly: float, venue: str):
             "multiplo": value / contributed, "peor_baja_en_dolares": float((v - v.cummax()).min())}
 
 
+def dca_frequencies(base: Ctx, monthly=(50, 100, 250)):
+    """
+    Idea N5 de Fable (24 oct 2026): con el mínimo de 1 dólar por orden de IBKR, comprar cada
+    semana con 100 dólares al mes son 52 órdenes de ~23 dólares (~4% de comisión). Misma
+    aportación mensual, distinta frecuencia: semanal, quincenal o mensual.
+    """
+    spy = base.etf_close(["SPY"])["SPY"].dropna()
+    spy = spy[spy.index >= pd.Timestamp(START, tz=spy.index.tz)]
+    rows = []
+    for m in monthly:
+        for name, freq, per_month in (("semanal", "W-MON", 52 / 12), ("quincenal", "2W-MON", 26 / 12), ("mensual", "MS", 1.0)):
+            amount = m / per_month
+            res = backtest_dca(spy, amount=amount, freq=freq, costs=Costs(fee=1.0 / amount, slippage=0.0003))
+            orders = int(round(res.invested.iloc[-1] / amount))
+            rows.append({"mensual": m, "frecuencia": name, "por_orden": amount, "ordenes": orders,
+                         "comisiones": float(orders * 1.0), "tir": res.irr,
+                         "valor_final": float(res.value.iloc[-1]), "aportado": float(res.invested.iloc[-1])})
+    return rows
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -115,6 +135,8 @@ def main():
         rows.append({"estrategia": "efectivo_tbill", "nombre": "Sólo T-bills (sin estrategia)", "lugar": "-",
                      "mensual": m, **simulate(cash, pd.Series(0.0, index=cash.index), m, "ibkr")})
 
+    dca = dca_frequencies(base)
+
     def clean(o):
         if isinstance(o, float):
             return None if np.isnan(o) or np.isinf(o) else o
@@ -127,8 +149,14 @@ def main():
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(clean({
         "generado": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "desde": START, "inicial": INITIAL, "mensuales": MONTHLY, "filas": rows,
+        "desde": START, "inicial": INITIAL, "mensuales": MONTHLY, "filas": rows, "dca_frecuencia": dca,
     }), ensure_ascii=False), encoding="utf-8")
+    print("DCA al S&P 500 en IBKR (1 dólar por orden), desde " + START + ":")
+    for m in sorted({d["mensual"] for d in dca}):
+        cells = "   ".join(f"{d['frecuencia']}: TIR {d['tir'] * 100:+.1f}% (comisiones {d['comisiones']:,.0f})"
+                           for d in dca if d["mensual"] == m)
+        print(f"  ${m}/mes  {cells}")
+    print()
 
     print(f"Cuenta que empieza con ${INITIAL:,.0f} el {START} y aporta cada mes (efectivo ocioso al 0%):\n")
     print(f"{'Estrategia':44} " + " ".join(f"{'+$' + str(m) + '/mes':>22}" for m in MONTHLY))

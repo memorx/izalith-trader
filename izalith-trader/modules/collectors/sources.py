@@ -342,10 +342,24 @@ def polymarket_top(limit: int = 30) -> Dict:
     return {"ts": datetime.now(timezone.utc).isoformat(), "mercados": markets}
 
 
+def kraken_spreads(pairs=("XBTUSD", "ETHUSD", "PAXGUSD")) -> Dict:
+    """
+    Spread de Kraken (USD) en este momento. Idea N6 de Fable (24 oct 2026): juntar 4 semanas por
+    hora para fijar la hora del rebalanceo semanal donde el spread es más chico.
+    """
+    data = _get("https://api.kraken.com/0/public/Ticker?pair=" + ",".join(pairs))
+    out = {"ts": datetime.now(timezone.utc).isoformat(), "pares": {}}
+    for name, t in (data.get("result") or {}).items():
+        bid, ask = float(t["b"][0]), float(t["a"][0])
+        mid = (bid + ask) / 2
+        out["pares"][name] = {"bid": bid, "ask": ask, "spread_bps": (ask - bid) / mid * 1e4 if mid else None}
+    return out
+
+
 def collect_all() -> Dict:
     out = {}
     for name, fn in (("funding", funding_snapshot), ("bitso", bitso_premium), ("paises", country_premiums),
-                     ("polymarket", polymarket_top)):
+                     ("polymarket", polymarket_top), ("kraken_spreads", kraken_spreads)):
         try:
             out[name] = fn()
         except Exception as e:
